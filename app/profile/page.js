@@ -9,13 +9,18 @@ export default async function Profile() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: profile }, { count: followers }, { count: following }, { data: favorites }, { data: friendRows }] =
+  const [
+    { data: profileRow },
+    { data: friendCode },
+    { count: followers },
+    { count: following },
+    { data: favorites },
+    { data: friendRows },
+  ] =
     await Promise.all([
-      supabase
-        .from('profiles')
-        .select('username, bio, friend_code, profile_visibility')
-        .eq('id', user.id)
-        .single(),
+      supabase.from('profiles').select('username, bio, profile_visibility').eq('id', user.id).single(),
+      // friend_code isn't selectable directly (it'd be visible to everyone).
+      supabase.rpc('my_friend_code'),
       supabase
         .from('follows')
         .select('*', { count: 'exact', head: true })
@@ -35,6 +40,7 @@ export default async function Profile() {
       supabase.from('friendships').select('friend_id').eq('user_id', user.id).limit(8),
     ]);
 
+  const profile = profileRow ? { ...profileRow, friend_code: friendCode } : null;
   const friendIds = (friendRows ?? []).map((f) => f.friend_id);
   const { data: friendProfiles } = friendIds.length
     ? await supabase.from('profiles').select('id, username').in('id', friendIds)

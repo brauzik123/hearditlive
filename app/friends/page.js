@@ -28,18 +28,17 @@ export default function Friends() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: myProfile } = await supabase
-        .from('profiles')
-        .select('id, username, friend_code')
-        .eq('id', user.id)
-        .single();
-      setMe(myProfile);
+      const [{ data: myProfile }, { data: friendCode }] = await Promise.all([
+        supabase.from('profiles').select('id, username').eq('id', user.id).single(),
+        supabase.rpc('my_friend_code'),
+      ]);
+      setMe(myProfile ? { ...myProfile, friend_code: friendCode } : null);
 
       const [{ data: friendRows }, { data: requestRows }, { data: myFollows }] = await Promise.all([
         supabase.from('friendships').select('friend_id').eq('user_id', user.id),
         supabase
           .from('follows')
-          .select('id, follower_id, profiles!follows_follower_id_fkey(username)')
+          .select('follower_id, profiles!follows_follower_id_fkey(username)')
           .eq('followee_id', user.id)
           .eq('status', 'pending'),
         supabase.from('follows').select('followee_id, status').eq('follower_id', user.id),
@@ -52,7 +51,7 @@ export default function Friends() {
       setFriends(friendProfiles ?? []);
 
       setRequests(
-        (requestRows ?? []).map((r) => ({ id: r.id, followerId: r.follower_id, username: r.profiles?.username }))
+        (requestRows ?? []).map((r) => ({ id: r.follower_id, followerId: r.follower_id, username: r.profiles?.username }))
       );
 
       const map = {};
@@ -92,11 +91,8 @@ export default function Friends() {
     setFriendCodeError('');
     const code = friendCodeInput.trim();
     if (!code) return;
-    const { data: target } = await supabase
-      .from('profiles')
-      .select('id, username, profile_visibility')
-      .eq('friend_code', code)
-      .maybeSingle();
+    const { data: matches } = await supabase.rpc('find_profile_by_friend_code', { code });
+    const target = matches?.[0];
     if (!target) {
       setFriendCodeError('No account with that friend code.');
       return;
@@ -109,16 +105,28 @@ export default function Friends() {
     setFriendCodeInput('');
   };
 
+  // follows has a composite key (follower_id, followee_id) — no id column.
   const accept = async (request) => {
-    const { error } = await supabase.from('follows').update({ status: 'accepted' }).eq('id', request.id);
+    const { error } = await supabase
+      .from('follows')
+      .update({ status: 'accepted' })
+      .eq('follower_id', request.followerId)
+      .eq('followee_id', me?.id);
     if (!error) {
       setRequests((r) => r.filter((req) => req.id !== request.id));
-      setFriends((f) => [...f, { id: request.followerId, username: request.username }]);
+      // Accepting makes them a follower; they're a friend only if you follow back.
+      if (followingMap[request.followerId] === 'accepted') {
+        setFriends((f) => [...f, { id: request.followerId, username: request.username }]);
+      }
     }
   };
 
   const decline = async (request) => {
-    const { error } = await supabase.from('follows').delete().eq('id', request.id);
+    const { error } = await supabase
+      .from('follows')
+      .delete()
+      .eq('follower_id', request.followerId)
+      .eq('followee_id', me?.id);
     if (!error) setRequests((r) => r.filter((req) => req.id !== request.id));
   };
 
