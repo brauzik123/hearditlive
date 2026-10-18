@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { createClient } from '../utils/supabase/client';
 import { Home, Grid, User, PlusCircle, Music2 } from 'lucide-react';
 
 const links = [
@@ -11,8 +13,41 @@ const links = [
   { href: '/profile', label: 'Profile', icon: User },
 ];
 
+// Small dot-with-count on the Profile tab for pending follow requests.
+function Badge({ count }) {
+  if (!count) return null;
+  return (
+    <span className="absolute -top-1 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-brand text-brand-foreground text-[10px] font-bold flex items-center justify-center">
+      {count > 9 ? '9+' : count}
+    </span>
+  );
+}
+
 export default function NavBar() {
   const pathname = usePathname();
+  const [pendingRequests, setPendingRequests] = useState(0);
+
+  // Re-checked on every navigation, so accepting a request on /friends
+  // clears the badge as soon as you move on.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+      const { count } = await supabase
+        .from('follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('followee_id', session.user.id)
+        .eq('status', 'pending');
+      if (!cancelled) setPendingRequests(count ?? 0);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   return (
     <nav className="fixed bottom-0 left-0 w-full bg-surface border-t border-border z-50 md:top-0 md:bottom-auto md:border-t-0 md:border-b">
@@ -35,7 +70,10 @@ export default function NavBar() {
                   active ? 'text-foreground' : 'text-muted hover:text-foreground'
                 }`}
               >
-                <Icon size={18} />
+                <span className="relative">
+                  <Icon size={18} />
+                  {href === '/profile' && <Badge count={pendingRequests} />}
+                </span>
                 {label}
               </Link>
             );
@@ -81,7 +119,10 @@ export default function NavBar() {
             const active = pathname.startsWith(href);
             return (
               <Link key={href} href={href} className="flex flex-col items-center gap-1 px-3 py-1">
-                <Icon size={22} className={active ? 'text-foreground' : 'text-muted'} />
+                <span className="relative">
+                  <Icon size={22} className={active ? 'text-foreground' : 'text-muted'} />
+                  {href === '/profile' && <Badge count={pendingRequests} />}
+                </span>
                 <span className={`text-[10px] ${active ? 'text-foreground' : 'text-muted'}`}>{label}</span>
               </Link>
             );

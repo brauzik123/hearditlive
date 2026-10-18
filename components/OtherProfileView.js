@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import EntryRow from './EntryRow';
 import { User as UserIcon, Image as ImageIcon, Lock, Clock, UserCheck, UserPlus, UserMinus } from 'lucide-react';
 import { createClient } from '../utils/supabase/client';
 
@@ -26,12 +28,18 @@ export default function OtherProfileView({
   canViewContent,
   favorites,
   totalConcerts,
+  concerts,
 }) {
   const supabase = createClient();
+  const router = useRouter();
   const [followState, setFollowState] = useState(stateFromStatus(initialFollowStatus));
   const [busy, setBusy] = useState(false);
 
-  const isLocked = !canViewContent && followState !== FOLLOW_STATES.FOLLOWING;
+  const isLocked = !canViewContent;
+  const lockedMessage =
+    profile.profile_visibility === 'private'
+      ? `${profile.username} keeps their concerts private.`
+      : `Only ${profile.username}'s friends can see their concerts. You become friends when you both follow each other.`;
 
   const handleFollow = async () => {
     setBusy(true);
@@ -54,6 +62,8 @@ export default function OtherProfileView({
       if (!error) setFollowState(FOLLOW_STATES.NOT_FOLLOWING);
     }
     setBusy(false);
+    // Following can make you friends, which can unlock their concerts.
+    router.refresh();
   };
 
   const followButtonLabel = {
@@ -110,8 +120,10 @@ export default function OtherProfileView({
       {isLocked ? (
         <div className="flex flex-col items-center gap-2 py-12 text-center text-muted">
           <Lock size={28} />
-          <p className="font-medium text-foreground">This profile is private</p>
-          <p className="text-sm">Follow {profile.username} to see their concerts and stats.</p>
+          <p className="font-medium text-foreground">
+            {profile.profile_visibility === 'private' ? 'This profile is private' : 'Friends only'}
+          </p>
+          <p className="text-sm max-w-xs">{lockedMessage}</p>
         </div>
       ) : (
         <>
@@ -142,8 +154,19 @@ export default function OtherProfileView({
 
           <hr className="border-border" />
 
-          <section className="flex items-center justify-between">
-            <h2 className="font-bold text-lg">{totalConcerts} concerts logged</h2>
+          <section className="flex flex-col gap-3">
+            <h2 className="font-bold text-lg">
+              {totalConcerts} {totalConcerts === 1 ? 'concert' : 'concerts'} logged
+            </h2>
+            {concerts.length === 0 ? (
+              <p className="text-sm text-muted italic">Nothing to show yet.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {concerts.map((entry) => (
+                  <EntryRow key={entry.id} entry={entry} />
+                ))}
+              </div>
+            )}
           </section>
         </>
       )}

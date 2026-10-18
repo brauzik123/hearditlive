@@ -5,6 +5,7 @@ import {
   Image as ImageIcon, Globe, Lock, UserCheck, Ticket,
 } from 'lucide-react';
 import { createClient } from '../../../utils/supabase/server';
+import DeleteEntryButton from '../../../components/DeleteEntryButton';
 
 const visibilityMeta = {
   public: { icon: Globe, label: 'Visible to anyone' },
@@ -75,12 +76,15 @@ export default async function EntryDetail({ params }) {
           <ArrowLeft size={16} /> Back to collection
         </Link>
         {isOwner && (
-          <Link
-            href={`/log?edit=${id}`}
-            className="flex items-center gap-1.5 text-sm bg-surface border border-border rounded-full px-3 py-1.5 hover:border-brand transition"
-          >
-            <Pencil size={14} /> Edit
-          </Link>
+          <div className="flex items-start gap-2">
+            <DeleteEntryButton entryId={id} userId={entry.user_id} />
+            <Link
+              href={`/log?edit=${id}`}
+              className="flex items-center gap-1.5 text-sm bg-surface border border-border rounded-full px-3 py-1.5 hover:border-brand transition"
+            >
+              <Pencil size={14} /> Edit
+            </Link>
+          </div>
         )}
       </div>
 

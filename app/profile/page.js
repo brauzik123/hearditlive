@@ -16,6 +16,7 @@ export default async function Profile() {
     { count: following },
     { data: favorites },
     { data: friendRows },
+    { count: pendingRequests },
   ] =
     await Promise.all([
       supabase.from('profiles').select('username, bio, profile_visibility').eq('id', user.id).single(),
@@ -38,6 +39,11 @@ export default async function Profile() {
         .eq('is_favorite', true)
         .limit(6),
       supabase.from('friendships').select('friend_id').eq('user_id', user.id).limit(8),
+      supabase
+        .from('follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('followee_id', user.id)
+        .eq('status', 'pending'),
     ]);
 
   const profile = profileRow ? { ...profileRow, friend_code: friendCode } : null;
@@ -101,7 +107,8 @@ export default async function Profile() {
           href="/friends"
           className="flex-1 bg-brand text-brand-foreground py-2 rounded-lg font-bold hover:opacity-90 transition flex justify-center items-center gap-2 text-sm"
         >
-          <UserPlus size={16} /> Add Friends
+          <UserPlus size={16} />
+          {pendingRequests ? `Friend requests (${pendingRequests})` : 'Add Friends'}
         </Link>
       </section>
 

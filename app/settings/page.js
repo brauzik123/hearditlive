@@ -8,6 +8,7 @@ import {
   EyeOff, LogOut, Check, Loader2,
 } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
+import DeleteAccountSection from '../../components/DeleteAccountSection';
 
 const inputClass =
   'bg-surface border border-border rounded-lg px-3 py-2.5 text-foreground focus:outline-none focus:border-brand transition w-full';
@@ -216,6 +217,7 @@ export default function Settings() {
         >
           <LogOut size={16} /> Sign out
         </button>
+        <DeleteAccountSection />
       </section>
 
       <div className="fixed bottom-16 md:bottom-0 left-0 w-full bg-background border-t border-border p-3">

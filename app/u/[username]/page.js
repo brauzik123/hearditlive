@@ -56,8 +56,11 @@ export default async function OtherProfilePage({ params }) {
 
   let favorites = [];
   let totalConcerts = 0;
+  let concerts = [];
   if (canViewContent) {
-    const [{ data: favData }, { count }] = await Promise.all([
+    // Individual entries can still be hidden (friends-only / only-me); the
+    // database filters those, so counts and lists reflect what you can see.
+    const [{ data: favData }, { count }, { data: concertData }] = await Promise.all([
       supabase
         .from('concert_entries')
         .select('id, event_date, artists(name)')
@@ -69,9 +72,16 @@ export default async function OtherProfilePage({ params }) {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', profile.id)
         .eq('entry_type', 'attended'),
+      supabase
+        .from('concert_entries')
+        .select('id, entry_type, event_date, rating, artists(name, image_url), venues(name, city)')
+        .eq('user_id', profile.id)
+        .order('event_date', { ascending: false, nullsFirst: false })
+        .limit(100),
     ]);
     favorites = favData ?? [];
     totalConcerts = count ?? 0;
+    concerts = concertData ?? [];
   }
 
   return (
@@ -84,6 +94,7 @@ export default async function OtherProfilePage({ params }) {
       canViewContent={canViewContent}
       favorites={favorites}
       totalConcerts={totalConcerts}
+      concerts={concerts}
     />
   );
 }

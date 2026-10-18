@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Music, MapPin, Star, Ticket, ArrowRight, Image as ImageIcon } from 'lucide-react';
 import { createClient } from '../utils/supabase/server';
+import EntryRow from '../components/EntryRow';
 
 const ticketStatusLabel = {
   interested: 'Interested',
@@ -14,7 +15,7 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: attended }, { data: mostRecentRows }, { data: upcoming }] = await Promise.all([
+  const [{ data: attended }, { data: mostRecentRows }, { data: upcoming }, { data: followRows }] = await Promise.all([
     supabase
       .from('concert_entries')
       .select('artist_id, artists(name), venues(city)')
@@ -34,7 +35,24 @@ export default async function Home() {
       .eq('entry_type', 'planned')
       .order('event_date', { ascending: true, nullsFirst: false })
       .limit(5),
+    supabase.from('follows').select('followee_id').eq('follower_id', user.id).eq('status', 'accepted'),
   ]);
+
+  // Activity feed: latest entries from people you follow. Visibility is
+  // enforced by the database (private profiles, friends-only entries), so
+  // this only ever returns what you're allowed to see.
+  const followedIds = (followRows ?? []).map((f) => f.followee_id);
+  const { data: feedRows } = followedIds.length
+    ? await supabase
+        .from('concert_entries')
+        .select(
+          'id, entry_type, event_date, rating, created_at, artists(name, image_url), venues(name, city), profiles!concert_entries_user_id_fkey(username)'
+        )
+        .in('user_id', followedIds)
+        .order('created_at', { ascending: false })
+        .limit(20)
+    : { data: [] };
+  const feed = feedRows ?? [];
 
   const totalShows = attended?.length ?? 0;
   const artistCount = new Set((attended ?? []).map((e) => e.artist_id).filter(Boolean)).size;
@@ -67,6 +85,29 @@ export default async function Home() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* Activity feed */}
+      <section className="bg-surface rounded-2xl p-6 border border-border">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold">Friends&apos; Activity</h2>
+          <Link href="/friends" className="text-sm text-muted hover:text-foreground transition">
+            Find friends
+          </Link>
+        </div>
+        {feed.length === 0 ? (
+          <div className="flex items-center justify-center h-24 text-muted italic text-center text-sm">
+            {followedIds.length === 0
+              ? 'Follow people to see the concerts they log here.'
+              : 'Nobody you follow has logged a concert yet.'}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {feed.map((entry) => (
+              <EntryRow key={entry.id} entry={entry} username={entry.profiles?.username} showTimeAgo />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Most recent concert */}
