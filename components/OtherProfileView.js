@@ -3,20 +3,16 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import EntryRow from './EntryRow';
-import { User as UserIcon, Image as ImageIcon, Lock, Clock, UserCheck, UserPlus, UserMinus, Music2 } from 'lucide-react';
+import { Lock, Clock, UserPlus, UserMinus, Music2 } from 'lucide-react';
 import { createClient } from '../utils/supabase/client';
-
-const FOLLOW_STATES = {
-  NOT_FOLLOWING: 'not_following',
-  PENDING: 'pending',
-  FOLLOWING: 'following',
-};
+import { useI18n } from '../i18n/client';
+import ProfileHeader from './ProfileHeader';
+import TicketStub from './TicketStub';
 
 function stateFromStatus(status) {
-  if (status === 'accepted') return FOLLOW_STATES.FOLLOWING;
-  if (status === 'pending') return FOLLOW_STATES.PENDING;
-  return FOLLOW_STATES.NOT_FOLLOWING;
+  if (status === 'accepted') return 'following';
+  if (status === 'pending') return 'pending';
+  return 'none';
 }
 
 export default function OtherProfileView({
@@ -26,157 +22,102 @@ export default function OtherProfileView({
   following,
   initialFollowStatus,
   canViewContent,
-  favorites,
   totalConcerts,
   concerts,
 }) {
-  const supabase = createClient();
+  const { t } = useI18n();
   const router = useRouter();
   const [followState, setFollowState] = useState(stateFromStatus(initialFollowStatus));
   const [busy, setBusy] = useState(false);
 
-  const isLocked = !canViewContent;
-  const lockedMessage =
-    profile.profile_visibility === 'private'
-      ? `${profile.username} keeps their concerts private.`
-      : `Only ${profile.username}'s friends can see their concerts. You become friends when you both follow each other.`;
-
   const handleFollow = async () => {
     setBusy(true);
+    const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (followState === FOLLOW_STATES.NOT_FOLLOWING) {
-      const status = profile.profile_visibility === 'private' ? 'pending' : 'accepted';
-      const { error } = await supabase
+    if (followState === 'none') {
+      // The database decides accepted vs pending (private profiles need
+      // approval); read back what it chose.
+      const { data, error } = await supabase
         .from('follows')
-        .insert({ follower_id: user.id, followee_id: profile.id, status });
-      if (!error) setFollowState(status === 'pending' ? FOLLOW_STATES.PENDING : FOLLOW_STATES.FOLLOWING);
+        .insert({ follower_id: user.id, followee_id: profile.id })
+        .select('status')
+        .single();
+      if (!error) setFollowState(stateFromStatus(data.status));
     } else {
       const { error } = await supabase
         .from('follows')
         .delete()
         .eq('follower_id', user.id)
         .eq('followee_id', profile.id);
-      if (!error) setFollowState(FOLLOW_STATES.NOT_FOLLOWING);
+      if (!error) setFollowState('none');
     }
     setBusy(false);
     // Following can make you friends, which can unlock their concerts.
     router.refresh();
   };
 
-  const followButtonLabel = {
-    [FOLLOW_STATES.NOT_FOLLOWING]: 'Follow',
-    [FOLLOW_STATES.PENDING]: 'Requested',
-    [FOLLOW_STATES.FOLLOWING]: 'Following',
-  }[followState];
-
-  const FollowIcon =
-    followState === FOLLOW_STATES.PENDING ? Clock : followState === FOLLOW_STATES.FOLLOWING ? UserMinus : UserPlus;
+  const FollowIcon = followState === 'pending' ? Clock : followState === 'following' ? UserMinus : UserPlus;
 
   return (
-    <main className="p-4 md:p-8 max-w-2xl mx-auto flex flex-col gap-8">
-
-      {/* Header */}
-      <section className="flex items-start gap-6">
-        <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-surface flex items-center justify-center border border-border shrink-0">
-          <UserIcon size={40} className="text-muted" />
-        </div>
-
-        <div className="flex flex-col flex-1 mt-2 min-w-0">
-          <h1 className="text-2xl font-bold truncate">{profile.username}</h1>
-          {!isLocked && profile.bio && <p className="text-muted text-sm mt-1">{profile.bio}</p>}
-
-          <div className="flex gap-6 mt-4 text-sm">
-            <div className="flex flex-col">
-              <span className="font-bold text-lg">{followers}</span>
-              <span className="text-muted">Followers</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-lg">{following}</span>
-              <span className="text-muted">Following</span>
-            </div>
-          </div>
-        </div>
-      </section>
+    <main className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-6 md:py-10">
+      <ProfileHeader
+        username={profile.username}
+        bio={canViewContent ? profile.bio : null}
+        shows={canViewContent ? totalConcerts : null}
+        followers={followers}
+        following={following}
+      />
 
       {!isSelf && (
         <button
           onClick={handleFollow}
           disabled={busy}
-          className={`flex items-center justify-center gap-2 py-2 rounded-lg font-bold text-sm transition disabled:opacity-60 ${
-            followState === FOLLOW_STATES.FOLLOWING
-              ? 'bg-surface-light border border-border hover:border-red-400 hover:text-red-400'
-              : followState === FOLLOW_STATES.PENDING
-              ? 'bg-surface-light border border-border text-muted'
-              : 'bg-brand text-brand-foreground hover:opacity-90'
+          className={`group flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition disabled:opacity-60 ${
+            followState === 'none'
+              ? 'bg-brand text-brand-foreground hover:brightness-105'
+              : 'border border-border text-foreground hover:border-danger hover:text-danger'
           }`}
         >
-          <FollowIcon size={16} /> {followButtonLabel}
+          <FollowIcon size={16} /> {t(`profile.follow.${followState}`)}
         </button>
       )}
 
-      {isLocked ? (
-        <div className="flex flex-col items-center gap-2 py-12 text-center text-muted">
-          <Lock size={28} />
-          <p className="font-medium text-foreground">
-            {profile.profile_visibility === 'private' ? 'This profile is private' : 'Friends only'}
+      {!canViewContent ? (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12 text-center">
+          <Lock size={24} className="text-muted" />
+          <p className="font-semibold">
+            {profile.profile_visibility === 'private' ? t('profile.lockedPrivateTitle') : t('profile.lockedFriendsTitle')}
           </p>
-          <p className="text-sm max-w-xs">{lockedMessage}</p>
+          <p className="max-w-xs text-sm text-muted">
+            {profile.profile_visibility === 'private'
+              ? t('profile.lockedPrivate', { name: profile.username })
+              : t('profile.lockedFriends', { name: profile.username })}
+          </p>
         </div>
       ) : (
-        <>
-          <hr className="border-border" />
-
-          <section>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-bold text-lg">Favourite Concerts</h2>
+        <section className="flex flex-col gap-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="marquee text-3xl">{t('profile.concerts')}</h2>
+            <Link
+              href={isSelf ? '/songs' : `/u/${profile.username}/songs`}
+              className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm transition hover:border-brand"
+            >
+              <Music2 size={14} /> {t('profile.songsHeard')}
+            </Link>
+          </div>
+          {concerts.length === 0 ? (
+            <p className="text-sm text-muted">{t('profile.concertsEmpty', { name: profile.username })}</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {concerts.map((entry) => (
+                <TicketStub key={entry.id} entry={entry} />
+              ))}
             </div>
-            {favorites.length === 0 ? (
-              <p className="text-sm text-muted italic">No favorites yet.</p>
-            ) : (
-              <div className="grid grid-cols-3 gap-3">
-                {favorites.map((concert) => (
-                  <Link
-                    href={`/entry/${concert.id}`}
-                    key={concert.id}
-                    className="aspect-square bg-surface rounded-xl border border-border flex flex-col items-center justify-center p-2 text-center"
-                  >
-                    <ImageIcon size={24} className="text-muted mb-2" />
-                    <span className="text-xs font-bold truncate w-full">{concert.artists?.name ?? 'Unknown artist'}</span>
-                    {concert.event_date && <span className="text-[10px] text-muted">{concert.event_date.slice(0, 4)}</span>}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <hr className="border-border" />
-
-          <section className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-bold text-lg">
-                {totalConcerts} {totalConcerts === 1 ? 'concert' : 'concerts'} logged
-              </h2>
-              <Link
-                href={isSelf ? '/songs' : `/u/${profile.username}/songs`}
-                className="flex items-center gap-1.5 text-sm bg-surface border border-border rounded-full px-3 py-1.5 hover:border-brand transition"
-              >
-                <Music2 size={14} /> Songs heard live
-              </Link>
-            </div>
-            {concerts.length === 0 ? (
-              <p className="text-sm text-muted italic">Nothing to show yet.</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {concerts.map((entry) => (
-                  <EntryRow key={entry.id} entry={entry} />
-                ))}
-              </div>
-            )}
-          </section>
-        </>
+          )}
+        </section>
       )}
     </main>
   );

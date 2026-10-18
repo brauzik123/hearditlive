@@ -1,14 +1,23 @@
 @import "tailwindcss";
 
+/* HeardItLive — "the ticket box".
+   The app is a dark auditorium; every logged show is a paper ticket stub
+   sitting in it. Indigo night instead of black, lilac ticket paper, and
+   one spotlight amber for actions, ratings and anything you've heard. */
 :root {
-  --background: #0b0b0d;
-  --surface: #17171b;
-  --surface-light: #212126;
-  --border: #2a2a30;
-  --foreground: #f5f5f7;
-  --muted: #8b8b93;
-  --brand: #ff5a3c;
-  --brand-foreground: #14100f;
+  --background: #1b1838;      /* auditorium */
+  --surface: #262149;         /* balcony: raised panels */
+  --surface-light: #2f2a58;   /* inputs, chips inside panels */
+  --border: #3b3570;          /* rail */
+  --foreground: #f4f1fb;
+  --muted: #a8a2cf;
+  --brand: #ffc23d;           /* spotlight */
+  --brand-foreground: #1b1838;
+  --paper: #f2edf9;           /* ticket paper */
+  --paper-ink: #1b1838;
+  --paper-muted: #6b6496;
+  --paper-rule: #c9c0e0;
+  --danger: #ff7a8a;
 }
 
 @theme inline {
@@ -20,13 +29,19 @@
   --color-muted: var(--muted);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-paper: var(--paper);
+  --color-paper-ink: var(--paper-ink);
+  --color-paper-muted: var(--paper-muted);
+  --color-paper-rule: var(--paper-rule);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-marquee);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Default only: inside the base layer so border-* utilities (selected
@@ -35,6 +50,15 @@ body {
 @layer base {
   * {
     border-color: var(--border);
+  }
+
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
   }
 }
 
@@ -48,15 +72,58 @@ textarea::placeholder {
   color: var(--muted);
 }
 
-.filter-select {
-  @apply bg-surface-light border border-border rounded-lg px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-brand transition;
+/* Condensed marquee type: artist names, dates, big numbers. */
+.marquee {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.005em;
+  line-height: 0.95;
 }
 
-/* Slim, dark-friendly scrollbars for horizontally-scrolling rows (friends list, etc). */
+/* The ticket stub. Two half-circle bites at the tear line (set with
+   --tear, measured from the left) are cut out with a mask, and the stub
+   side gets a dashed perforation. */
+.ticket {
+  --tear: calc(100% - 5.25rem);
+  --bite: 9px;
+  background: var(--paper);
+  color: var(--paper-ink);
+  border-radius: 10px;
+  -webkit-mask:
+    radial-gradient(circle at var(--tear) 0, transparent var(--bite), #000 calc(var(--bite) + 0.5px)) top / 100% 51% no-repeat,
+    radial-gradient(circle at var(--tear) 100%, transparent var(--bite), #000 calc(var(--bite) + 0.5px)) bottom / 100% 51% no-repeat;
+  mask:
+    radial-gradient(circle at var(--tear) 0, transparent var(--bite), #000 calc(var(--bite) + 0.5px)) top / 100% 51% no-repeat,
+    radial-gradient(circle at var(--tear) 100%, transparent var(--bite), #000 calc(var(--bite) + 0.5px)) bottom / 100% 51% no-repeat;
+}
+.ticket-stub {
+  width: 5.25rem;
+  border-left: 2px dashed var(--paper-rule);
+}
+
+/* In the components layer so utilities on the same element (pl-10 for a
+   search icon, rounded-full…) still win. */
+@layer components {
+  .field {
+    @apply w-full bg-surface-light border border-border rounded-lg px-3 py-2.5 text-sm text-foreground transition focus:outline-none focus:border-brand;
+  }
+
+  .filter-select {
+    @apply bg-surface-light border border-border rounded-lg px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-brand transition;
+  }
+}
+
 .scrollbar-thin::-webkit-scrollbar {
   height: 6px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

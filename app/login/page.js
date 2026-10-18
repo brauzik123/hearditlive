@@ -2,20 +2,33 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, User as UserIcon, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
+import { useI18n } from '../../i18n/client';
+import LanguageSwitch from '../../components/LanguageSwitch';
+
+// Supabase reports errors in English; map the ones people actually hit.
+function authErrorKey(error) {
+  if (error.code === 'invalid_credentials') return 'login.errors.invalidCredentials';
+  if (error.code === 'user_already_exists' || error.code === 'email_exists') return 'login.errors.emailTaken';
+  if (error.code === 'weak_password') return 'login.errors.weakPassword';
+  if (error.code === 'over_email_send_rate_limit' || error.status === 429) return 'login.errors.rateLimited';
+  if (error.code === 'email_not_confirmed') return 'login.errors.notConfirmed';
+  // The profile insert trigger fails when the chosen username is taken.
+  if (error.message?.includes('Database error saving new user')) return 'login.errors.usernameTaken';
+  return 'login.errors.generic';
+}
 
 export default function Login() {
+  const { t } = useI18n();
+  const router = useRouter();
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const isLogin = mode === 'login';
-  const router = useRouter();
-  const supabase = createClient();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
@@ -28,7 +41,7 @@ export default function Login() {
 
   const handleGoogleSignIn = async () => {
     setError('');
-    await supabase.auth.signInWithOAuth({
+    await createClient().auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
@@ -40,17 +53,17 @@ export default function Login() {
     setError('');
     setInfo('');
     if (!email.trim()) {
-      setError('Enter your email above first, then tap "Forgot your password?" again.');
+      setError(t('login.forgotNeedsEmail'));
       return;
     }
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    const { error: resetError } = await createClient().auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
     });
     if (resetError) {
-      setError(resetError.message);
+      setError(t(authErrorKey(resetError)));
       return;
     }
-    setInfo('If an account exists for that email, a reset link is on its way.');
+    setInfo(t('login.forgotSent'));
   };
 
   const handleSubmit = async (e) => {
@@ -58,105 +71,135 @@ export default function Login() {
     setError('');
     setInfo('');
 
-    if (!isLogin && password !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
+    if (!isLogin) {
+      if (!/^[A-Za-z0-9_.]{3,30}$/.test(username.trim())) {
+        setError(t('settings.usernameInvalid'));
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError(t('login.errors.passwordsDiffer'));
+        return;
+      }
     }
 
     setLoading(true);
+    const supabase = createClient();
 
     if (isLogin) {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       setLoading(false);
       if (signInError) {
-        setError(signInError.message);
+        setError(t(authErrorKey(signInError)));
         return;
       }
       router.push('/');
       router.refresh();
+      return;
+    }
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { username: username.trim() } },
+    });
+    setLoading(false);
+    if (signUpError) {
+      setError(t(authErrorKey(signUpError)));
+      return;
+    }
+    if (data.session) {
+      router.push('/');
+      router.refresh();
     } else {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { username } },
-      });
-      setLoading(false);
-      if (signUpError) {
-        setError(signUpError.message);
-        return;
-      }
-      if (data.session) {
-        router.push('/');
-        router.refresh();
-      } else {
-        setInfo('Check your email to confirm your account, then log in.');
-        setMode('login');
-      }
+      setInfo(t('login.checkEmail'));
+      setMode('login');
     }
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-sm flex flex-col gap-6">
+    <main className="flex min-h-screen flex-col px-5 py-6">
+      <div className="flex justify-end">
+        <LanguageSwitch />
+      </div>
 
-        <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight">
-            Heard<span className="text-brand">It</span>Live
-          </h1>
-          <p className="text-muted text-sm mt-2">Your personal concert logbook</p>
+      <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-8 py-10">
+        <div>
+          <p className="marquee text-[5.5rem] leading-[0.85] sm:text-8xl">
+            Heard
+            <br />
+            It Live
+          </p>
+          <p className="mt-4 text-muted">{t('login.tagline')}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3 bg-surface border border-border rounded-2xl p-6">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <h1 className="text-lg font-semibold">{isLogin ? t('login.loginTitle') : t('login.registerTitle')}</h1>
           {!isLogin && (
-            <Field icon={UserIcon} type="text" placeholder="Username" value={username} onChange={setUsername} required />
+            <Field label={t('settings.username')} type="text" autoComplete="username" value={username} onChange={setUsername} />
           )}
-          <Field icon={Mail} type="email" placeholder="Email" value={email} onChange={setEmail} required />
-          <Field icon={Lock} type="password" placeholder="Password" value={password} onChange={setPassword} required />
+          <Field label={t('login.email')} type="email" autoComplete="email" value={email} onChange={setEmail} />
+          <Field
+            label={t('login.password')}
+            type="password"
+            autoComplete={isLogin ? 'current-password' : 'new-password'}
+            value={password}
+            onChange={setPassword}
+          />
           {!isLogin && (
-            <Field icon={Lock} type="password" placeholder="Confirm password" value={confirmPassword} onChange={setConfirmPassword} required />
+            <Field
+              label={t('login.confirmPassword')}
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+            />
           )}
 
           {isLogin && (
-            <button
-              type="button"
-              onClick={handleForgotPassword}
-              className="text-xs text-muted hover:text-foreground transition self-end -mt-1"
-            >
-              Forgot your password?
+            <button type="button" onClick={handleForgotPassword} className="self-start text-sm text-muted hover:text-foreground">
+              {t('login.forgot')}
             </button>
           )}
 
-          {error && <p className="text-xs text-red-400">{error}</p>}
-          {info && <p className="text-xs text-brand">{info}</p>}
+          {error && (
+            <p role="alert" className="text-sm text-danger">
+              {error}
+            </p>
+          )}
+          {info && (
+            <p role="status" className="text-sm text-brand">
+              {info}
+            </p>
+          )}
 
           <button
             type="submit"
             disabled={loading}
-            className="flex items-center justify-center gap-2 bg-brand text-brand-foreground font-bold rounded-full py-2.5 mt-1 hover:opacity-90 transition disabled:opacity-60"
+            className="mt-1 flex items-center justify-center gap-2 rounded-full bg-brand py-3 font-bold text-brand-foreground transition hover:brightness-105 disabled:opacity-60"
           >
             {loading && <Loader2 size={16} className="animate-spin" />}
-            {isLogin ? 'Log In' : 'Create Account'}
+            {isLogin ? t('login.loginButton') : t('login.registerButton')}
           </button>
 
-          <div className="flex items-center gap-3 my-1">
+          <div className="my-2 flex items-center gap-3 text-xs text-muted">
             <hr className="flex-1 border-border" />
-            <span className="text-xs text-muted">or continue with</span>
+            {t('login.or')}
             <hr className="flex-1 border-border" />
           </div>
 
           <button
             type="button"
             onClick={handleGoogleSignIn}
-            className="flex items-center justify-center gap-2 bg-surface-light border border-border rounded-full py-2.5 text-sm font-medium hover:border-muted transition"
+            className="flex items-center justify-center gap-2 rounded-full border border-border py-3 text-sm font-medium transition hover:border-muted"
           >
-            <GoogleIcon /> Sign in with Google
+            <GoogleIcon /> {t('login.google')}
           </button>
         </form>
 
-        <p className="text-center text-sm text-muted">
-          {isLogin ? "Don't have an account? " : 'Already have an account? '}
-          <button onClick={() => switchMode(isLogin ? 'register' : 'login')} className="text-brand font-medium">
-            {isLogin ? 'Register here' : 'Log in'}
+        <p className="text-sm text-muted">
+          {isLogin ? t('login.noAccount') : t('login.haveAccount')}{' '}
+          <button onClick={() => switchMode(isLogin ? 'register' : 'login')} className="font-semibold text-brand">
+            {isLogin ? t('login.registerLink') : t('login.loginLink')}
           </button>
         </p>
       </div>
@@ -164,23 +207,18 @@ export default function Login() {
   );
 }
 
-function Field({ icon: Icon, value, onChange, ...props }) {
+function Field({ label, value, onChange, ...props }) {
   return (
-    <div className="relative">
-      <Icon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
-      <input
-        {...props}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-surface-light border border-border rounded-lg py-2.5 pl-10 pr-3 text-sm focus:outline-none focus:border-brand transition"
-      />
-    </div>
+    <label className="flex flex-col gap-1.5 text-sm">
+      <span className="text-muted">{label}</span>
+      <input {...props} required value={value} onChange={(e) => onChange(e.target.value)} className="field" />
+    </label>
   );
 }
 
 function GoogleIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24">
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
       <path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.63h6.46c-.28 1.5-1.13 2.77-2.4 3.62v3h3.87c2.27-2.09 3.59-5.17 3.59-8.8z" />
       <path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.94-2.92l-3.87-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.1C3.24 21.3 7.29 24 12 24z" />
       <path fill="#FBBC05" d="M5.27 14.27a7.2 7.2 0 010-4.54v-3.1H1.27a12 12 0 000 10.74l4-3.1z" />

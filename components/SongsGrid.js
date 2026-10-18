@@ -4,11 +4,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, Music2, Loader2, ArrowLeft } from 'lucide-react';
+import { useI18n } from '../i18n/client';
 
 // Your own Songs (/songs) or someone else's (/u/[username]/songs). For
 // someone else, `owner` is { id, username } and the sync classifies their
 // heard songs instead of yours.
 export default function SongsGrid({ artists, basePath, owner = null }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [syncingIds, setSyncingIds] = useState(() => new Set(artists.filter((a) => a.needsSync).map((a) => a.id)));
   const router = useRouter();
@@ -55,68 +57,72 @@ export default function SongsGrid({ artists, basePath, owner = null }) {
   }, [artists, query]);
 
   return (
-    <main className="p-4 md:p-8 max-w-5xl mx-auto flex flex-col gap-6">
+    <main className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 md:py-10">
       {owner && (
-        <Link href={`/u/${owner.username}`} className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition">
-          <ArrowLeft size={16} /> Back to {owner.username}
+        <Link href={`/u/${owner.username}`} className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground">
+          <ArrowLeft size={16} /> {t('songs.backTo', { name: owner.username })}
         </Link>
       )}
       <div>
-        <h1 className="text-2xl font-bold">{owner ? `${owner.username}'s Songs` : 'Songs'}</h1>
-        <p className="text-sm text-muted mt-1">
-          {owner
-            ? `Every artist ${owner.username} has heard live, with how much of their catalog they've covered.`
-            : "Every artist you've heard live, with how much of their catalog you've covered."}
+        <h1 className="marquee text-5xl">{owner ? t('songs.titleOf', { name: owner.username }) : t('songs.title')}</h1>
+        <p className="mt-1 max-w-prose text-sm text-muted">
+          {owner ? t('songs.subtitleOf', { name: owner.username }) : t('songs.subtitle')}
         </p>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={18} />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search artists..."
-          className="w-full bg-surface border border-border rounded-full py-2 pl-10 pr-4 text-foreground focus:outline-none focus:border-brand transition"
-        />
-      </div>
+      {artists.length > 6 && (
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" size={17} />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('songs.search')}
+            aria-label={t('songs.search')}
+            className="field rounded-full pl-10"
+          />
+        </div>
+      )}
 
       {filtered.length === 0 ? (
-        <div className="flex items-center justify-center h-32 text-muted italic">
-          {artists.length === 0
-            ? owner
-              ? 'Nothing to show yet.'
-              : 'Log a concert with a setlist to start building this out.'
-            : 'No artists match your search.'}
-        </div>
+        <p className="rounded-xl border border-dashed border-border px-5 py-8 text-center text-sm text-muted">
+          {artists.length === 0 ? (owner ? t('songs.emptyOf') : t('songs.empty')) : t('songs.noMatches')}
+        </p>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4">
           {filtered.map((artist) => {
             const syncing = syncingIds.has(artist.id);
             return (
-              <Link
-                href={`${basePath}/${artist.id}`}
-                key={artist.id}
-                className="group relative bg-surface rounded-xl overflow-hidden border border-border hover:border-muted transition flex flex-col"
-              >
-                <div className="aspect-square bg-surface-light flex items-center justify-center overflow-hidden">
+              <Link href={`${basePath}/${artist.id}`} key={artist.id} className="group flex flex-col gap-2">
+                <div className="relative aspect-square overflow-hidden rounded-xl bg-surface">
                   {artist.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={artist.imageUrl} alt="" className="w-full h-full object-cover" />
+                    <img
+                      src={artist.imageUrl}
+                      alt=""
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                    />
                   ) : (
-                    <Music2 size={32} className="text-muted" />
+                    <div className="flex h-full items-center justify-center">
+                      <Music2 size={32} className="text-muted" />
+                    </div>
+                  )}
+                  {syncing && (
+                    <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-background/85 px-2 py-1 text-[11px] text-muted">
+                      <Loader2 size={10} className="animate-spin" /> {t('songs.syncing')}
+                    </span>
+                  )}
+                  {artist.pct != null && (
+                    <span className="marquee absolute bottom-2 left-2 rounded-md bg-background/85 px-2 py-0.5 text-2xl text-brand">
+                      {artist.pct}%
+                    </span>
                   )}
                 </div>
-                {syncing && (
-                  <span className="absolute top-2 right-2 flex items-center gap-1 bg-background/80 border border-border rounded-full px-2 py-1 text-[10px] text-muted">
-                    <Loader2 size={10} className="animate-spin" /> Syncing
-                  </span>
-                )}
-                <div className="p-3 border-t border-border">
-                  <h3 className="font-bold truncate">{artist.name}</h3>
-                  <p className="text-xs text-muted mt-0.5">
-                    {artist.totalHeard} heard · {artist.distinctHeard} distinct
-                    {artist.pct != null && ` · ${artist.pct}% of catalog`}
+                <div className="min-w-0">
+                  <h3 className="marquee truncate text-2xl">{artist.name}</h3>
+                  <p className="text-xs text-muted">
+                    {t('songs.heardCount', { count: artist.distinctHeard })}
+                    {artist.totalHeard > artist.distinctHeard && <> {t('songs.playsCount', { count: artist.totalHeard })}</>}
                   </p>
                 </div>
               </Link>

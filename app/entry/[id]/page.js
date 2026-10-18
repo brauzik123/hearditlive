@@ -1,27 +1,19 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import {
-  ArrowLeft, Pencil, Star, MapPin, Calendar, Heart, Users, Tag as TagIcon,
-  Image as ImageIcon, Globe, Lock, UserCheck, Ticket,
-} from 'lucide-react';
+import { ArrowLeft, Pencil, Heart, Globe, Lock, UserCheck } from 'lucide-react';
 import { createClient } from '../../../utils/supabase/server';
+import { getI18n } from '../../../i18n/server';
 import DeleteEntryButton from '../../../components/DeleteEntryButton';
+import TicketStub from '../../../components/TicketStub';
+import Avatar from '../../../components/Avatar';
 
-const visibilityMeta = {
-  public: { icon: Globe, label: 'Visible to anyone' },
-  friends: { icon: UserCheck, label: 'Friends only' },
-  private: { icon: Lock, label: 'Only visible to you' },
-};
-
-const ticketStatusLabel = {
-  interested: 'Interested',
-  bought: 'Tickets bought',
-  confirmed: 'Confirmed',
-};
+const VISIBILITY_ICON = { public: Globe, friends: UserCheck, private: Lock };
+const RANK = { public: 0, friends: 1, private: 2 };
 
 export default async function EntryDetail({ params }) {
   const { id } = await params;
   const supabase = await createClient();
+  const { t } = await getI18n();
 
   const {
     data: { user },
@@ -32,10 +24,10 @@ export default async function EntryDetail({ params }) {
     .select(
       `*, artists(name), venues(name, city), festivals(name),
        entry_photos(id, url, caption, position),
-       entry_setlist(song_name, position, is_encore),
+       entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist),
        entry_attendees(guest_name),
        entry_tags(tags(name)),
-       profiles!concert_entries_user_id_fkey(default_entry_visibility, profile_visibility)`
+       profiles!concert_entries_user_id_fkey(username, default_entry_visibility, profile_visibility)`
     )
     .eq('id', id)
     .maybeSingle();
@@ -43,202 +35,162 @@ export default async function EntryDetail({ params }) {
   if (!entry) notFound();
 
   const isOwner = user?.id === entry.user_id;
+  const ownerName = entry.profiles?.username;
+
   // Mirrors entry_visible_to_viewer: the profile setting is a ceiling the
   // entry's own setting can only narrow.
-  const RANK = { public: 0, friends: 1, private: 2 };
   const entryVisibility =
     entry.visibility === 'inherit' ? entry.profiles?.default_entry_visibility ?? 'public' : entry.visibility;
   const profileVisibility = entry.profiles?.profile_visibility ?? 'public';
   const effectiveVisibility =
     (RANK[profileVisibility] ?? 0) > (RANK[entryVisibility] ?? 0) ? profileVisibility : entryVisibility;
-  const VisibilityIcon = visibilityMeta[effectiveVisibility]?.icon ?? Globe;
+  const VisibilityIcon = VISIBILITY_ICON[effectiveVisibility] ?? Globe;
 
   const photos = (entry.entry_photos ?? []).sort((a, b) => a.position - b.position);
-  const photosWithUrls = await Promise.all(
-    photos.map(async (photo) => {
-      const { data: signed } = await supabase.storage.from('entry-photos').createSignedUrl(photo.url, 3600);
-      return { ...photo, signedUrl: signed?.signedUrl ?? null };
-    })
-  );
+  const { data: signed } = photos.length
+    ? await supabase.storage.from('entry-photos').createSignedUrls(photos.map((p) => p.url), 3600)
+    : { data: [] };
+  const signedByPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
+  const gallery = photos.map((p) => ({ ...p, src: signedByPath.get(p.url) })).filter((p) => p.src);
 
   const setlist = (entry.entry_setlist ?? []).sort((a, b) => a.position - b.position);
+  const mainSet = setlist.filter((s) => !s.is_encore);
+  const encore = setlist.filter((s) => s.is_encore);
   const attendees = (entry.entry_attendees ?? []).map((a) => a.guest_name).filter(Boolean);
-  const tags = (entry.entry_tags ?? []).map((t) => t.tags?.name).filter(Boolean);
+  const tags = (entry.entry_tags ?? []).map((tag) => tag.tags?.name).filter(Boolean);
 
-  const formattedDate = entry.event_date
-    ? new Date(entry.event_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-    : null;
+  const backHref = isOwner ? '/collection' : `/u/${ownerName}`;
+  const backLabel = isOwner ? t('entry.backToCollection') : t('entry.backToProfile', { name: ownerName });
 
   return (
-    <main className="p-4 md:p-8 max-w-2xl mx-auto flex flex-col gap-6 pb-8">
-      <div className="flex items-center justify-between">
-        <Link href="/collection" className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition">
-          <ArrowLeft size={16} /> Back to collection
+    <main className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-6 md:py-10">
+      <div className="flex items-center justify-between gap-3">
+        <Link href={backHref} className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground">
+          <ArrowLeft size={16} /> {backLabel}
         </Link>
         {isOwner && (
           <div className="flex items-start gap-2">
             <DeleteEntryButton entryId={id} userId={entry.user_id} />
             <Link
               href={`/log?edit=${id}`}
-              className="flex items-center gap-1.5 text-sm bg-surface border border-border rounded-full px-3 py-1.5 hover:border-brand transition"
+              className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm transition hover:border-brand"
             >
-              <Pencil size={14} /> Edit
+              <Pencil size={14} /> {t('common.edit')}
             </Link>
           </div>
         )}
       </div>
 
-      {/* Cover + gallery */}
-      {photosWithUrls.length > 0 && (
-        <>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2 aspect-square bg-surface-light border border-border rounded-2xl flex items-center justify-center overflow-hidden">
-              {photosWithUrls[0].signedUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={photosWithUrls[0].signedUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <ImageIcon size={40} className="text-muted" />
-              )}
-            </div>
-            <div className="flex flex-col gap-2">
-              {photosWithUrls.slice(1, 3).map((photo) => (
-                <div
-                  key={photo.id}
-                  className="flex-1 bg-surface-light border border-border rounded-2xl flex items-center justify-center overflow-hidden"
-                >
-                  {photo.signedUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={photo.signedUrl} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <ImageIcon size={20} className="text-muted" />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-          {photosWithUrls.some((p) => p.caption) && (
-            <div className="flex flex-col gap-1 -mt-4">
-              {photosWithUrls
-                .filter((p) => p.caption)
-                .map((p) => (
-                  <p key={p.id} className="text-xs text-muted italic">
-                    &ldquo;{p.caption}&rdquo;
-                  </p>
-                ))}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Header */}
-      <section className="flex flex-col gap-2">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">{entry.artists?.name ?? 'Unknown artist'}</h1>
-            {entry.venues?.name && (
-              <p className="text-muted flex items-center gap-1 mt-1">
-                <MapPin size={14} /> {entry.venues.name}
-                {entry.venues.city ? `, ${entry.venues.city}` : ''}
-              </p>
-            )}
-            {formattedDate && (
-              <p className="text-muted flex items-center gap-1 mt-1">
-                <Calendar size={14} /> {formattedDate}
-              </p>
-            )}
-          </div>
-          {entry.rating != null && (
-            <div className="flex items-center gap-1 text-brand font-bold text-lg shrink-0">
-              <Star size={18} className="fill-brand" /> {entry.rating}/10
-            </div>
-          )}
-          {entry.ticket_status && (
-            <div className="flex items-center gap-1 text-brand font-bold text-sm shrink-0">
-              <Ticket size={16} /> {ticketStatusLabel[entry.ticket_status]}
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 mt-2">
-          {entry.tour_name && (
-            <span className="text-xs bg-surface-light border border-border rounded-full px-3 py-1">{entry.tour_name}</span>
-          )}
-          {entry.festivals?.name && (
-            <span className="text-xs bg-surface-light border border-border rounded-full px-3 py-1">{entry.festivals.name}</span>
-          )}
+      <section className="flex flex-col gap-3">
+        <TicketStub entry={entry} size="lg" asLink={false} />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
+          {entry.festivals?.name && <span>{t('entry.atFestival', { name: entry.festivals.name })}</span>}
+          {entry.tour_name && <span>{entry.tour_name}</span>}
           {entry.is_favorite && (
-            <span className="flex items-center gap-1 text-xs text-brand">
-              <Heart size={12} className="fill-brand" /> Favorite
+            <span className="flex items-center gap-1 text-brand">
+              <Heart size={13} className="fill-brand" /> {t('entry.favorite')}
             </span>
           )}
           {isOwner && (
-            <span className="flex items-center gap-1 text-xs text-muted ml-auto">
-              <VisibilityIcon size={12} /> {visibilityMeta[effectiveVisibility]?.label}
+            <span className="ml-auto flex items-center gap-1.5">
+              <VisibilityIcon size={13} /> {t(`entry.visibility.${effectiveVisibility}`)}
             </span>
+          )}
+          {!isOwner && ownerName && (
+            <Link href={`/u/${ownerName}`} className="flex items-center gap-2 hover:text-foreground">
+              <Avatar username={ownerName} size={22} /> {t('entry.loggedBy', { name: ownerName })}
+            </Link>
           )}
         </div>
       </section>
 
-      <hr className="border-border" />
-
-      {/* Description */}
-      {entry.description && (
-        <section>
-          <h2 className="font-bold mb-2">Notes</h2>
-          <p className="text-sm text-muted leading-relaxed">{entry.description}</p>
-        </section>
-      )}
-
-      {/* Setlist */}
-      {setlist.length > 0 && (
-        <section>
-          <h2 className="font-bold mb-3">Setlist</h2>
-          <ol className="flex flex-col gap-2">
-            {setlist.map((song, i) => (
-              <li key={`${song.song_name}-${i}`} className="flex items-center gap-3 text-sm">
-                <span className="text-muted w-5 shrink-0">{i + 1}.</span>
-                <span className={song.is_encore ? 'text-brand' : ''}>{song.song_name}</span>
-                {song.is_encore && <span className="text-[10px] text-muted uppercase tracking-wide">encore</span>}
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-
-      {/* Attendees */}
-      {attendees.length > 0 && (
-        <section>
-          <h2 className="font-bold mb-3 flex items-center gap-1.5">
-            <Users size={16} /> Who was there
-          </h2>
-          <div className="flex gap-3">
-            {attendees.map((name) => (
-              <div key={name} className="flex flex-col items-center gap-1">
-                <div className="w-10 h-10 rounded-full bg-surface-light border border-border flex items-center justify-center text-xs">
-                  {name[0]}
-                </div>
-                <span className="text-xs text-muted">{name}</span>
-              </div>
+      {gallery.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <div className={`grid gap-2 ${gallery.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            {gallery.map((photo, i) => (
+              <figure
+                key={photo.id}
+                className={`overflow-hidden rounded-xl bg-surface ${gallery.length > 2 && i === 0 ? 'col-span-2' : ''}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo.src} alt={photo.caption ?? ''} className="max-h-[28rem] w-full object-cover" />
+                {photo.caption && <figcaption className="px-3 py-2 text-xs text-muted">{photo.caption}</figcaption>}
+              </figure>
             ))}
           </div>
         </section>
       )}
 
-      {/* Tags */}
-      {tags.length > 0 && (
-        <section>
-          <h2 className="font-bold mb-3 flex items-center gap-1.5">
-            <TagIcon size={16} /> Tags
+      {entry.description && (
+        <section className="flex flex-col gap-2">
+          <h2 className="marquee text-3xl">{t('entry.notes')}</h2>
+          <p className="max-w-prose whitespace-pre-line leading-relaxed text-foreground/90">{entry.description}</p>
+        </section>
+      )}
+
+      {setlist.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="marquee text-3xl">
+            {t('entry.setlist')} <span className="text-muted">{setlist.length}</span>
           </h2>
-          <div className="flex flex-wrap gap-2">
-            {tags.map((tag) => (
-              <span key={tag} className="text-xs bg-surface-light border border-border rounded-full px-3 py-1 text-muted">
-                {tag}
+          <ol className="flex flex-col">
+            {mainSet.map((song, i) => (
+              <SetlistRow key={`m-${i}`} number={i + 1} song={song} t={t} />
+            ))}
+          </ol>
+          {encore.length > 0 && (
+            <>
+              <p className="mt-2 border-t border-dashed border-border pt-3 text-sm font-semibold text-brand">
+                {t('entry.encore')}
+              </p>
+              <ol className="flex flex-col">
+                {encore.map((song, i) => (
+                  <SetlistRow key={`e-${i}`} number={mainSet.length + i + 1} song={song} t={t} />
+                ))}
+              </ol>
+            </>
+          )}
+        </section>
+      )}
+
+      {attendees.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="marquee text-3xl">{t('entry.whoWasThere')}</h2>
+          <div className="flex flex-wrap gap-3">
+            {attendees.map((name) => (
+              <span key={name} className="flex items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 text-sm">
+                <Avatar username={name} size={26} /> {name}
               </span>
             ))}
           </div>
         </section>
       )}
+
+      {tags.length > 0 && (
+        <section className="flex flex-wrap gap-2">
+          {tags.map((tag) => (
+            <span key={tag} className="rounded-full bg-surface px-3 py-1 text-sm text-muted">
+              #{tag}
+            </span>
+          ))}
+        </section>
+      )}
     </main>
+  );
+}
+
+function SetlistRow({ number, song, t }) {
+  return (
+    <li className="flex items-baseline gap-4 border-b border-border/60 py-2 last:border-b-0">
+      <span className="marquee w-6 shrink-0 text-right text-lg text-muted">{number}</span>
+      <span className="flex-1">
+        {song.song_name}
+        {song.is_cover && (
+          <span className="ml-2 text-xs text-muted">
+            {song.cover_original_artist ? t('entry.coverOf', { artist: song.cover_original_artist }) : t('entry.cover')}
+          </span>
+        )}
+      </span>
+    </li>
   );
 }

@@ -4,12 +4,14 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Trash2, Loader2 } from 'lucide-react';
 import { createClient } from '../utils/supabase/client';
+import { useI18n } from '../i18n/client';
 
 // Two-tap delete: the first tap arms it, the second deletes. Removes the
 // entry's photo files from Storage first (the database row cascades to its
 // setlist, photos, tags and attendees, but Storage files don't cascade).
 export default function DeleteEntryButton({ entryId, userId }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [armed, setArmed] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
@@ -32,7 +34,7 @@ export default function DeleteEntryButton({ entryId, userId }) {
 
     const { error: deleteError } = await supabase.from('concert_entries').delete().eq('id', entryId);
     if (deleteError) {
-      setError('Could not delete this entry.');
+      setError(t('entry.deleteFailed'));
       setDeleting(false);
       setArmed(false);
       return;
@@ -46,13 +48,13 @@ export default function DeleteEntryButton({ entryId, userId }) {
         onClick={handleClick}
         disabled={deleting}
         className={`flex items-center gap-1.5 text-sm rounded-full px-3 py-1.5 border transition disabled:opacity-60 ${
-          armed ? 'bg-red-500/10 border-red-400 text-red-400' : 'bg-surface border-border hover:border-red-400'
+          armed ? 'bg-danger/10 border-danger text-danger' : 'border-border hover:border-danger'
         }`}
       >
         {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-        {armed ? 'Tap again to delete' : 'Delete'}
+        {armed ? t('entry.deleteConfirm') : t('common.delete')}
       </button>
-      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+      {error && <p className="text-xs text-danger mt-1">{error}</p>}
     </div>
   );
 }

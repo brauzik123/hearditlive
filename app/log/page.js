@@ -7,8 +7,9 @@ import {
   ChevronLeft, ChevronRight, Check, Users, Tag as TagIcon, Lock, Globe, Loader2, Image as ImageIcon,
 } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
+import { useI18n } from '../../i18n/client';
 
-const STEPS = ['Basics', 'Details', 'Photos & Setlist', 'Friends & Privacy'];
+const STEPS = ['basics', 'details', 'media', 'people'];
 
 const emptyForm = {
   entryType: 'attended',
@@ -86,10 +87,10 @@ async function resolveTag(supabase, userId, name) {
 function LogEntry() {
   const supabase = createClient();
   const router = useRouter();
+  const { t } = useI18n();
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [step, setStep] = useState(0);
-  const [savedDraft, setSavedDraft] = useState(false);
   const [loadingEntry, setLoadingEntry] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -156,11 +157,22 @@ function LogEntry() {
         setlistfmId: entry.setlistfm_id ?? null,
       });
       setLoadingEntry(false);
+
+      // Existing photos are private Storage paths; sign them so the editor
+      // shows thumbnails instead of blank tiles.
+      const paths = (entry.entry_photos ?? []).map((p) => p.url);
+      if (paths.length) {
+        const { data: signed } = await supabase.storage.from('entry-photos').createSignedUrls(paths, 3600);
+        const byPath = new Map((signed ?? []).map((x) => [x.path, x.signedUrl]));
+        setForm((current) => ({
+          ...current,
+          photos: current.photos.map((p) => (p.url ? { ...p, previewUrl: byPath.get(p.url) ?? null } : p)),
+        }));
+      }
     })();
   }, []);
 
   const next = () => {
-    if (step === 0) setSavedDraft(true);
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   };
   const back = () => setStep((s) => Math.max(s - 1, 0));
@@ -283,7 +295,7 @@ function LogEntry() {
       // renders fresh data anyway.
       router.push(`/entry/${entryId}`);
     } catch (err) {
-      setError(err.message ?? 'Something went wrong while saving.');
+      setError(err.message ?? t('log.saveFailed'));
       setSaving(false);
     }
   };
@@ -291,32 +303,22 @@ function LogEntry() {
   if (loadingEntry) {
     return (
       <main className="p-8 flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-muted" />
+        <Loader2 size={20} className="animate-spin text-muted" aria-label={t('common.loading')} />
       </main>
     );
   }
 
   return (
-    <main className="p-4 md:p-8 max-w-2xl mx-auto flex flex-col gap-6 pb-36 md:pb-8">
-      <div>
-        <h1 className="text-2xl font-bold">{editId ? 'Edit Concert' : 'Log a Concert'}</h1>
-        <p className="text-sm text-muted mt-1">
-          Attended it already, or still planning to go?
-        </p>
-      </div>
+    <main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-6 pb-36 md:py-10 md:pb-10">
+      <h1 className="marquee text-5xl">{editId ? t('log.editTitle') : t('log.title')}</h1>
 
       <EntryTypeToggle value={form.entryType} onChange={(v) => update({ entryType: v })} />
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
 
       {/* Mobile: step progress */}
       <div className="md:hidden">
-        <StepProgress steps={STEPS} current={step} />
-        {savedDraft && step > 0 && (
-          <p className="text-xs text-brand mt-2 flex items-center gap-1">
-            <Check size={12} /> Saved as a draft — you can finish this later.
-          </p>
-        )}
+        <StepProgress steps={STEPS.map((key) => t(`log.steps.${key}`))} current={step} />
       </div>
 
       {/* Mobile wizard: one step at a time */}
@@ -339,21 +341,21 @@ function LogEntry() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center justify-center gap-2 bg-brand text-brand-foreground font-bold rounded-full py-3 hover:opacity-90 transition disabled:opacity-60"
+          className="flex items-center justify-center gap-2 bg-brand text-brand-foreground font-bold rounded-full py-3 hover:brightness-105 transition disabled:opacity-60"
         >
           {saving && <Loader2 size={16} className="animate-spin" />}
-          {editId ? 'Save Changes' : 'Save Entry'}
+          {editId ? t('log.saveChanges') : t('log.save')}
         </button>
       </div>
 
       {/* Mobile wizard nav */}
-      <div className="md:hidden fixed bottom-16 left-0 w-full bg-background border-t border-border p-3 flex gap-3">
+      <div className="md:hidden fixed bottom-16 left-0 z-40 w-full bg-background/95 backdrop-blur border-t border-border p-3 flex gap-3">
         {step > 0 && (
           <button
             onClick={back}
             className="flex-1 flex items-center justify-center gap-1 bg-surface border border-border rounded-full py-3 font-medium"
           >
-            <ChevronLeft size={16} /> Back
+            <ChevronLeft size={16} /> {t('common.back')}
           </button>
         )}
         {step < STEPS.length - 1 ? (
@@ -361,7 +363,7 @@ function LogEntry() {
             onClick={next}
             className="flex-1 flex items-center justify-center gap-1 bg-brand text-brand-foreground rounded-full py-3 font-bold"
           >
-            Continue <ChevronRight size={16} />
+            {t('log.continue')} <ChevronRight size={16} />
           </button>
         ) : (
           <button
@@ -370,7 +372,7 @@ function LogEntry() {
             className="flex-1 flex items-center justify-center gap-1 bg-brand text-brand-foreground rounded-full py-3 font-bold disabled:opacity-60"
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-            {editId ? 'Save Changes' : 'Save Entry'}
+            {editId ? t('log.saveChanges') : t('log.save')}
           </button>
         )}
       </div>
@@ -379,14 +381,17 @@ function LogEntry() {
 }
 
 function EntryTypeToggle({ value, onChange }) {
+  const { t } = useI18n();
   return (
-    <div className="flex bg-surface border border-border rounded-full p-1">
+    <div role="radiogroup" className="flex bg-surface border border-border rounded-full p-1">
       {[
-        { id: 'attended', label: 'I went' },
-        { id: 'planned', label: "I'm planning to go" },
+        { id: 'attended', label: t('log.went') },
+        { id: 'planned', label: t('log.going') },
       ].map((opt) => (
         <button
           key={opt.id}
+          role="radio"
+          aria-checked={value === opt.id}
           onClick={() => onChange(opt.id)}
           className={`flex-1 py-2 rounded-full text-sm font-bold transition ${
             value === opt.id ? 'bg-brand text-brand-foreground' : 'text-muted hover:text-foreground'
@@ -415,7 +420,7 @@ function StepProgress({ steps, current }) {
 function Section({ title, children }) {
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="font-bold text-lg md:hidden">{title}</h2>
+      <h2 className="marquee text-3xl">{title}</h2>
       {children}
     </section>
   );
@@ -436,38 +441,38 @@ function Field({ label, icon: Icon, children }) {
   );
 }
 
-const inputClass =
-  'bg-surface border border-border rounded-lg px-3 py-2.5 text-foreground focus:outline-none focus:border-brand transition w-full';
+const inputClass = 'field';
 
 function BasicsSection({ form, update }) {
+  const { t } = useI18n();
   return (
-    <Section title="Basics">
+    <Section title={t('log.steps.basics')}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Field label="Artist" icon={Music}>
+        <Field label={t('log.artist')} icon={Music}>
           <input
             className={inputClass}
-            placeholder="e.g. Fontaines D.C."
+            placeholder={t('log.artistPlaceholder')}
             value={form.artist}
             onChange={(e) => update({ artist: e.target.value })}
           />
         </Field>
-        <Field label="Venue" icon={MapPin}>
+        <Field label={t('log.venue')} icon={MapPin}>
           <input
             className={inputClass}
-            placeholder="e.g. Roundhouse"
+            placeholder={t('log.venuePlaceholder')}
             value={form.venue}
             onChange={(e) => update({ venue: e.target.value })}
           />
         </Field>
-        <Field label="City">
+        <Field label={t('log.city')}>
           <input
             className={inputClass}
-            placeholder="e.g. London"
+            placeholder={t('log.cityPlaceholder')}
             value={form.city}
             onChange={(e) => update({ city: e.target.value })}
           />
         </Field>
-        <Field label={form.entryType === 'attended' ? 'Date' : 'Date (if known)'} icon={Calendar}>
+        <Field label={form.entryType === 'attended' ? t('log.date') : t('log.dateIfKnown')} icon={Calendar}>
           <input
             type="date"
             className={inputClass}
@@ -475,25 +480,25 @@ function BasicsSection({ form, update }) {
             onChange={(e) => update({ date: e.target.value })}
           />
         </Field>
-        <Field label="Tour name (optional)">
+        <Field label={t('log.tour')}>
           <input
             className={inputClass}
-            placeholder="e.g. Skinty Fia Tour"
+            placeholder={t('log.tourPlaceholder')}
             value={form.tourName}
             onChange={(e) => update({ tourName: e.target.value })}
           />
         </Field>
 
         {form.entryType === 'planned' && (
-          <Field label="Ticket status" icon={Ticket}>
+          <Field label={t('log.ticketStatus')} icon={Ticket}>
             <select
               className={inputClass}
               value={form.ticketStatus}
               onChange={(e) => update({ ticketStatus: e.target.value })}
             >
-              <option value="interested">Just interested</option>
-              <option value="bought">Tickets bought</option>
-              <option value="confirmed">Confirmed / going</option>
+              <option value="interested">{t('ticketStatus.interested')}</option>
+              <option value="bought">{t('ticketStatus.bought')}</option>
+              <option value="confirmed">{t('ticketStatus.confirmed')}</option>
             </select>
           </Field>
         )}
@@ -506,14 +511,14 @@ function BasicsSection({ form, update }) {
           onChange={(e) => update({ isFestival: e.target.checked })}
           className="accent-brand"
         />
-        This was/is a festival
+        {t('log.isFestival')}
       </label>
 
       {form.isFestival && (
-        <Field label="Festival name">
+        <Field label={t('log.festivalName')}>
           <input
             className={inputClass}
-            placeholder="e.g. Glastonbury 2027 (search setlist.fm or type your own)"
+            placeholder={t('log.festivalPlaceholder')}
             value={form.festivalName}
             onChange={(e) => update({ festivalName: e.target.value })}
           />
@@ -524,10 +529,11 @@ function BasicsSection({ form, update }) {
 }
 
 function DetailsSection({ form, update }) {
+  const { t } = useI18n();
   return (
-    <Section title="Details">
+    <Section title={t('log.steps.details')}>
       {form.entryType === 'attended' && (
-        <Field label={`Rating: ${form.rating}/10`} icon={Star}>
+        <Field label={t('log.rating', { rating: form.rating })} icon={Star}>
           <input
             type="range"
             min="1"
@@ -539,14 +545,14 @@ function DetailsSection({ form, update }) {
         </Field>
       )}
 
-      <Field label={form.entryType === 'attended' ? 'Description / memories' : 'Notes'}>
+      <Field label={form.entryType === 'attended' ? t('log.memories') : t('log.notes')}>
         <textarea
           className={inputClass}
           rows={4}
           placeholder={
             form.entryType === 'attended'
-              ? 'What made this show special?'
-              : 'Anything you want to remember about this plan?'
+              ? t('log.memoriesPlaceholder')
+              : t('log.notesPlaceholder')
           }
           value={form.description}
           onChange={(e) => update({ description: e.target.value })}
@@ -561,7 +567,7 @@ function DetailsSection({ form, update }) {
           className="accent-brand"
         />
         <Heart size={14} className={form.isFavorite ? 'fill-brand text-brand' : 'text-muted'} />
-        Add to favorites
+        {t('log.favorite')}
       </label>
     </Section>
   );
@@ -589,11 +595,12 @@ function MediaSetlistSection({ form, update }) {
   const updateSong = (id, name) =>
     update({ setlist: form.setlist.map((s) => (s.id === id ? { ...s, name } : s)) });
   const removeSong = (id) => update({ setlist: form.setlist.filter((s) => s.id !== id) });
+  const { t } = useI18n();
 
   return (
-    <Section title="Photos & Setlist">
+    <Section title={t('log.steps.media')}>
       <div>
-        <p className="text-sm text-muted mb-2">Photos</p>
+        <p className="text-sm text-muted mb-2">{t('log.photos')}</p>
         <div className="grid grid-cols-3 gap-3">
           {form.photos.map((photo) => (
             <div key={photo.id} className="flex flex-col gap-1.5">
@@ -606,22 +613,23 @@ function MediaSetlistSection({ form, update }) {
                 )}
                 <button
                   onClick={() => removePhoto(photo.id)}
-                  className="absolute top-1 right-1 bg-background/80 rounded-full p-0.5"
+                  aria-label={t('log.removePhoto')}
+                  className="absolute top-1 right-1 bg-background/80 rounded-full p-1"
                 >
                   <X size={12} />
                 </button>
               </div>
               <input
-                placeholder="Caption / @tag"
+                placeholder={t('log.caption')}
                 value={photo.caption}
                 onChange={(e) => updatePhotoCaption(photo.id, e.target.value)}
-                className="bg-surface border border-border rounded-md px-2 py-1 text-xs focus:outline-none focus:border-brand"
+                className="bg-surface-light border border-border rounded-md px-2 py-1 text-xs focus:outline-none focus:border-brand"
               />
             </div>
           ))}
           <label className="aspect-square bg-surface border border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-1 text-muted hover:border-brand hover:text-foreground transition cursor-pointer">
             <Plus size={20} />
-            <span className="text-xs">Add photo</span>
+            <span className="text-xs">{t('log.addPhoto')}</span>
             <input
               type="file"
               accept="image/*"
@@ -635,7 +643,7 @@ function MediaSetlistSection({ form, update }) {
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-sm text-muted">Setlist</p>
+          <p className="text-sm text-muted">{t('entry.setlist')}</p>
           <SetlistfmImport form={form} update={update} />
         </div>
         <div className="flex flex-col gap-2">
@@ -644,12 +652,12 @@ function MediaSetlistSection({ form, update }) {
               <span className="text-xs text-muted w-5 shrink-0">{i + 1}.</span>
               <input
                 className={inputClass}
-                placeholder="Song name"
+                placeholder={t('log.songName')}
                 value={song.name}
                 onChange={(e) => updateSong(song.id, e.target.value)}
               />
-              {song.isEncore && <span className="text-[10px] text-muted uppercase tracking-wide shrink-0">encore</span>}
-              <button onClick={() => removeSong(song.id)} className="text-muted hover:text-foreground shrink-0">
+              {song.isEncore && <span className="text-xs text-brand shrink-0">{t('entry.encore')}</span>}
+              <button onClick={() => removeSong(song.id)} aria-label={t('log.removeSong')} className="text-muted hover:text-foreground shrink-0">
                 <X size={16} />
               </button>
             </div>
@@ -658,7 +666,7 @@ function MediaSetlistSection({ form, update }) {
             onClick={addSong}
             className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition self-start"
           >
-            <Plus size={14} /> Add song
+            <Plus size={14} /> {t('log.addSong')}
           </button>
         </div>
       </div>
@@ -666,7 +674,14 @@ function MediaSetlistSection({ form, update }) {
   );
 }
 
+// setlist.fm dates arrive as dd-MM-yyyy.
+function setlistfmDateToIso(value) {
+  const [day, month, year] = (value ?? '').split('-');
+  return year && month && day ? `${year}-${month}-${day}` : null;
+}
+
 function SetlistfmImport({ form, update }) {
+  const { t, date } = useI18n();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -674,7 +689,7 @@ function SetlistfmImport({ form, update }) {
 
   const search = async () => {
     if (!form.artist.trim()) {
-      setError('Enter an artist first.');
+      setError(t('log.importNeedsArtist'));
       setOpen(true);
       return;
     }
@@ -687,10 +702,10 @@ function SetlistfmImport({ form, update }) {
       if (form.date) params.set('date', form.date);
       const res = await fetch(`/api/setlistfm/search?${params.toString()}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Search failed.');
+      if (!res.ok) throw new Error(data.error ?? t('log.importFailed'));
       setResults(data.setlists);
     } catch (err) {
-      setError(err.message ?? 'Search failed.');
+      setError(err.message ?? t('log.importFailed'));
     } finally {
       setLoading(false);
     }
@@ -712,29 +727,28 @@ function SetlistfmImport({ form, update }) {
     // The chosen setlist is the source of truth for the show's details:
     // override what was typed rather than leave e.g. a London venue on a
     // Paris setlist. setlist.fm dates come as dd-MM-yyyy.
-    const [day, month, year] = (setlist.eventDate ?? '').split('-');
     update({
       setlist: songs,
       setlistfmId: setlist.id,
       tourName: setlist.tourName || form.tourName,
       venue: setlist.venueName || form.venue,
       city: setlist.city || form.city,
-      date: year && month && day ? `${year}-${month}-${day}` : form.date,
+      date: setlistfmDateToIso(setlist.eventDate) ?? form.date,
     });
     setOpen(false);
   };
 
   return (
     <div className="relative">
-      <button onClick={search} className="text-xs text-brand hover:opacity-80 transition">
-        Import from setlist.fm
+      <button onClick={search} className="text-sm font-medium text-brand hover:brightness-110 transition">
+        {t('log.import')}
       </button>
 
       {open && (
-        <div className="absolute right-0 z-10 mt-2 w-80 max-h-80 overflow-y-auto bg-surface border border-border rounded-xl shadow-lg p-3 flex flex-col gap-2">
+        <div className="absolute right-0 z-30 mt-2 w-[min(20rem,calc(100vw-2rem))] max-h-80 overflow-y-auto bg-surface border border-border rounded-xl shadow-lg p-3 flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-bold">setlist.fm matches</p>
-            <button onClick={() => setOpen(false)} className="text-muted hover:text-foreground">
+            <p className="text-xs font-bold">{t('log.importMatches')}</p>
+            <button onClick={() => setOpen(false)} aria-label={t('common.close')} className="text-muted hover:text-foreground">
               <X size={14} />
             </button>
           </div>
@@ -745,10 +759,10 @@ function SetlistfmImport({ form, update }) {
             </div>
           )}
 
-          {!loading && error && <p className="text-xs text-red-400">{error}</p>}
+          {!loading && error && <p className="text-xs text-danger">{error}</p>}
 
           {!loading && !error && results?.length === 0 && (
-            <p className="text-xs text-muted italic">No matching setlists found. Try a different date, or add songs manually.</p>
+            <p className="text-xs text-muted">{t('log.importNone')}</p>
           )}
 
           {!loading &&
@@ -758,15 +772,13 @@ function SetlistfmImport({ form, update }) {
                 onClick={() => choose(s)}
                 className="text-left bg-surface-light border border-border rounded-lg p-2.5 hover:border-brand transition"
               >
-                <p className="text-sm font-medium">{s.eventDate}</p>
+                <p className="text-sm font-medium">{date(setlistfmDateToIso(s.eventDate)) || s.eventDate}</p>
                 <p className="text-xs text-muted truncate">
                   {s.venueName}
                   {s.city ? `, ${s.city}` : ''}
                 </p>
-                <p className="text-xs text-muted">
-                  {s.tourName ? `${s.tourName} · ` : ''}
-                  {s.songCount} songs
-                </p>
+                {s.tourName && <p className="text-xs text-muted truncate">{s.tourName}</p>}
+                <p className="text-xs text-muted">{t('log.songCount', { count: s.songCount })}</p>
               </button>
             ))}
         </div>
@@ -776,6 +788,7 @@ function SetlistfmImport({ form, update }) {
 }
 
 function ChipInput({ items, onAdd, onRemove, placeholder, icon: Icon }) {
+  const { t } = useI18n();
   const [value, setValue] = useState('');
   const submit = () => {
     const v = value.trim();
@@ -799,7 +812,7 @@ function ChipInput({ items, onAdd, onRemove, placeholder, icon: Icon }) {
             }
           }}
         />
-        <button onClick={submit} className="bg-surface border border-border rounded-lg px-3 hover:border-brand transition">
+        <button onClick={submit} aria-label={t('common.add')} className="bg-surface-light border border-border rounded-lg px-3 hover:border-brand transition">
           <Plus size={16} />
         </button>
       </div>
@@ -811,7 +824,7 @@ function ChipInput({ items, onAdd, onRemove, placeholder, icon: Icon }) {
               className="flex items-center gap-1.5 bg-surface-light border border-border rounded-full px-3 py-1 text-xs"
             >
               {Icon && <Icon size={12} />} {item}
-              <button onClick={() => onRemove(item)} className="text-muted hover:text-foreground">
+              <button onClick={() => onRemove(item)} aria-label={t('common.remove')} className="text-muted hover:text-foreground">
                 <X size={12} />
               </button>
             </span>
@@ -823,36 +836,37 @@ function ChipInput({ items, onAdd, onRemove, placeholder, icon: Icon }) {
 }
 
 function FriendsPrivacySection({ form, update }) {
+  const { t } = useI18n();
   return (
-    <Section title="Friends & Privacy">
-      <Field label="Who else was there? (friend username or name)" icon={Users}>
+    <Section title={t('log.steps.people')}>
+      <Field label={t('log.whoElse')} icon={Users}>
         <ChipInput
           items={form.attendees}
           onAdd={(v) => update({ attendees: [...form.attendees, v] })}
           onRemove={(v) => update({ attendees: form.attendees.filter((a) => a !== v) })}
-          placeholder="Add a friend or type a name"
+          placeholder={t('log.whoElsePlaceholder')}
         />
       </Field>
 
-      <Field label="Custom tags" icon={TagIcon}>
+      <Field label={t('log.tags')} icon={TagIcon}>
         <ChipInput
           items={form.tags}
           onAdd={(v) => update({ tags: [...form.tags, v] })}
           onRemove={(v) => update({ tags: form.tags.filter((t) => t !== v) })}
-          placeholder="e.g. Front row, Road trip..."
+          placeholder={t('log.tagsPlaceholder')}
         />
       </Field>
 
-      <Field label="Who can see this entry?" icon={form.visibility === 'private' ? Lock : Globe}>
+      <Field label={t('log.whoCanSee')} icon={form.visibility === 'private' ? Lock : Globe}>
         <select
           className={inputClass}
           value={form.visibility}
           onChange={(e) => update({ visibility: e.target.value })}
         >
-          <option value="inherit">Use my default privacy setting</option>
-          <option value="public">Anyone</option>
-          <option value="friends">Friends only</option>
-          <option value="private">Only me</option>
+          <option value="inherit">{t('log.visibilityDefault')}</option>
+          <option value="public">{t('visibility.public')}</option>
+          <option value="friends">{t('visibility.friends')}</option>
+          <option value="private">{t('visibility.private')}</option>
         </select>
       </Field>
     </Section>

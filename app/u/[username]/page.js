@@ -32,19 +32,12 @@ export default async function OtherProfilePage({ params }) {
       : Promise.resolve({ data: null }),
   ]);
 
-  let favorites = [];
   let totalConcerts = 0;
   let concerts = [];
   if (canViewContent) {
     // Individual entries can still be hidden (friends-only / only-me); the
     // database filters those, so counts and lists reflect what you can see.
-    const [{ data: favData }, { count }, { data: concertData }] = await Promise.all([
-      supabase
-        .from('concert_entries')
-        .select('id, event_date, artists(name)')
-        .eq('user_id', profile.id)
-        .eq('is_favorite', true)
-        .limit(6),
+    const [{ count }, { data: concertData }] = await Promise.all([
       supabase
         .from('concert_entries')
         .select('*', { count: 'exact', head: true })
@@ -52,12 +45,11 @@ export default async function OtherProfilePage({ params }) {
         .eq('entry_type', 'attended'),
       supabase
         .from('concert_entries')
-        .select('id, entry_type, event_date, rating, artists(name, image_url), venues(name, city)')
+        .select('id, entry_type, event_date, rating, ticket_status, artists(name), venues(name, city)')
         .eq('user_id', profile.id)
         .order('event_date', { ascending: false, nullsFirst: false })
         .limit(100),
     ]);
-    favorites = favData ?? [];
     totalConcerts = count ?? 0;
     concerts = concertData ?? [];
   }
@@ -70,7 +62,6 @@ export default async function OtherProfilePage({ params }) {
       following={following ?? 0}
       initialFollowStatus={viewerFollowRow?.status ?? null}
       canViewContent={canViewContent}
-      favorites={favorites}
       totalConcerts={totalConcerts}
       concerts={concerts}
     />

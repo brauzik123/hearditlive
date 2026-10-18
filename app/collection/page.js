@@ -2,28 +2,16 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import {
-  Search, SlidersHorizontal, Image as ImageIcon, LayoutGrid, Grid3x3, List, Star, X, Loader2,
-} from 'lucide-react';
+import { Search, Ticket, Image as ImageIcon, Star, Loader2, Music2 } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
+import { useI18n } from '../../i18n/client';
+import TicketStub from '../../components/TicketStub';
 
-const viewOptions = [
-  { id: 'grid', label: 'Gallery', icon: LayoutGrid },
-  { id: 'compact', label: 'Compact', icon: Grid3x3 },
-  { id: 'list', label: 'List', icon: List },
-];
-
-const sortOptions = [
-  { id: 'date_desc', label: 'Date (newest)' },
-  { id: 'date_asc', label: 'Date (oldest)' },
-  { id: 'rating_desc', label: 'Rating (highest)' },
-  { id: 'artist_asc', label: 'Artist (A-Z)' },
-];
+const SORTS = ['date_desc', 'date_asc', 'rating_desc', 'artist_asc'];
 
 export default function Collection() {
-  const supabase = createClient();
-  const [view, setView] = useState('grid');
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const { t, date } = useI18n();
+  const [view, setView] = useState('tickets');
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState([]);
   const [query, setQuery] = useState('');
@@ -33,6 +21,7 @@ export default function Collection() {
 
   useEffect(() => {
     (async () => {
+      const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -41,7 +30,7 @@ export default function Collection() {
       const { data, error } = await supabase
         .from('concert_entries')
         .select(
-          `id, event_date, rating, is_favorite, festival_id,
+          `id, entry_type, event_date, rating, ticket_status, is_favorite, festival_id,
            artist_id, artists(name, image_url), venues(name, city),
            entry_photos(url, position)`
         )
@@ -53,46 +42,48 @@ export default function Collection() {
         return;
       }
 
-      const withCovers = await Promise.all(
-        (data ?? []).map(async (entry) => {
-          const photos = (entry.entry_photos ?? []).sort((a, b) => a.position - b.position);
-          let coverUrl = null;
-          if (photos[0]) {
-            const { data: signed } = await supabase.storage
-              .from('entry-photos')
-              .createSignedUrl(photos[0].url, 3600);
-            coverUrl = signed?.signedUrl ?? null;
-          }
+      // One batch request for every cover photo instead of one per entry.
+      const rows = data ?? [];
+      const coverPaths = rows
+        .map((e) => (e.entry_photos ?? []).sort((a, b) => a.position - b.position)[0]?.url)
+        .filter(Boolean);
+      const { data: signed } = coverPaths.length
+        ? await supabase.storage.from('entry-photos').createSignedUrls(coverPaths, 3600)
+        : { data: [] };
+      const signedByPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
 
-          let fallbackImageUrl = entry.artists?.image_url ?? null;
-          if (!coverUrl && !fallbackImageUrl && entry.artist_id) {
-            try {
-              const res = await fetch('/api/spotify/artist-image', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ artistId: entry.artist_id }),
-              });
-              const json = await res.json();
-              fallbackImageUrl = json.imageUrl ?? null;
-            } catch {
-              // no fallback available — icon placeholder will show instead
-            }
-          }
-
-          return { ...entry, coverUrl: coverUrl ?? fallbackImageUrl };
-        })
-      );
-
+      const withCovers = rows.map((e) => {
+        const firstPhoto = (e.entry_photos ?? []).sort((a, b) => a.position - b.position)[0]?.url;
+        return { ...e, coverUrl: (firstPhoto && signedByPath.get(firstPhoto)) || e.artists?.image_url || null };
+      });
       setEntries(withCovers);
       setLoading(false);
+
+      // Artists we have no photo for yet: look each up once, in the
+      // background, and fill the covers in as they arrive.
+      const missing = [...new Set(withCovers.filter((e) => !e.coverUrl && e.artist_id).map((e) => e.artist_id))];
+      for (const artistId of missing) {
+        try {
+          const res = await fetch('/api/spotify/artist-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ artistId }),
+          });
+          const { imageUrl } = await res.json();
+          if (imageUrl) {
+            setEntries((list) => list.map((e) => (e.artist_id === artistId && !e.coverUrl ? { ...e, coverUrl: imageUrl } : e)));
+          }
+        } catch {
+          // No photo available; the placeholder stays.
+        }
+      }
     })();
   }, []);
 
   const filtered = useMemo(() => {
     let list = entries;
-
-    if (query.trim()) {
-      const q = query.trim().toLowerCase();
+    const q = query.trim().toLowerCase();
+    if (q) {
       list = list.filter(
         (e) =>
           e.artists?.name?.toLowerCase().includes(q) ||
@@ -103,208 +94,149 @@ export default function Collection() {
     if (favoritesOnly) list = list.filter((e) => e.is_favorite);
     if (festivalsOnly) list = list.filter((e) => e.festival_id);
 
-    list = [...list].sort((a, b) => {
+    return [...list].sort((a, b) => {
       if (sort === 'date_asc') return (a.event_date ?? '').localeCompare(b.event_date ?? '');
       if (sort === 'rating_desc') return (b.rating ?? 0) - (a.rating ?? 0);
       if (sort === 'artist_asc') return (a.artists?.name ?? '').localeCompare(b.artists?.name ?? '');
       return (b.event_date ?? '').localeCompare(a.event_date ?? '');
     });
-
-    return list;
   }, [entries, query, sort, favoritesOnly, festivalsOnly]);
 
   if (loading) {
     return (
-      <main className="p-8 flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-muted" />
+      <main className="flex justify-center p-12">
+        <Loader2 size={20} className="animate-spin text-muted" aria-label={t('common.loading')} />
       </main>
     );
   }
 
   return (
-    <main className="p-4 md:p-8 max-w-5xl mx-auto flex flex-col gap-6">
-
-      {/* Top bar: search + filter */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={18} />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search artists, venues, or cities..."
-            className="w-full bg-surface border border-border rounded-full py-2 pl-10 pr-4 text-foreground focus:outline-none focus:border-brand transition"
-          />
+    <main className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-6 md:py-10">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="marquee text-5xl">{t('collection.title')}</h1>
+          <p className="mt-1 text-sm text-muted">{t('collection.count', { count: entries.length })}</p>
         </div>
-        <button
-          onClick={() => setFiltersOpen((v) => !v)}
-          className={`p-2 rounded-full border transition ${
-            filtersOpen ? 'bg-brand text-brand-foreground border-brand' : 'bg-surface border-border text-foreground hover:border-muted'
-          }`}
-        >
-          <SlidersHorizontal size={18} />
-        </button>
-      </div>
-
-      {/* Filter panel */}
-      {filtersOpen && (
-        <div className="bg-surface border border-border rounded-2xl p-5 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold">Filters</h3>
-            <button onClick={() => setFiltersOpen(false)} className="text-muted hover:text-foreground">
-              <X size={18} />
-            </button>
-          </div>
-
-          <FilterField label="Sort by">
-            <select className="filter-select" value={sort} onChange={(e) => setSort(e.target.value)}>
-              {sortOptions.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </FilterField>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setFestivalsOnly((v) => !v)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition ${
-                festivalsOnly ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted hover:border-brand hover:text-foreground'
-              }`}
-            >
-              Festivals only
-            </button>
-            <button
-              onClick={() => setFavoritesOnly((v) => !v)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition ${
-                favoritesOnly ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted hover:border-brand hover:text-foreground'
-              }`}
-            >
-              Favorites only
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Count + view toggle */}
-      <div className="flex justify-between items-center text-sm text-muted">
-        <p>{filtered.length} concert{filtered.length === 1 ? '' : 's'} logged</p>
-        <div className="flex gap-1 bg-surface border border-border rounded-full p-1">
-          {viewOptions.map(({ id, label, icon: Icon }) => (
+        <div role="tablist" aria-label={t('collection.view')} className="flex rounded-full border border-border p-1">
+          {[
+            { id: 'tickets', icon: Ticket },
+            { id: 'photos', icon: ImageIcon },
+          ].map(({ id, icon: Icon }) => (
             <button
               key={id}
+              role="tab"
+              aria-selected={view === id}
               onClick={() => setView(id)}
-              title={label}
-              className={`p-1.5 rounded-full transition ${
-                view === id ? 'bg-brand text-brand-foreground' : 'text-muted hover:text-foreground'
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition ${
+                view === id ? 'bg-brand font-semibold text-brand-foreground' : 'text-muted hover:text-foreground'
               }`}
             >
-              <Icon size={16} />
+              <Icon size={15} /> <span className="hidden sm:inline">{t(`collection.${id}`)}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="flex items-center justify-center h-32 text-muted italic">
-          No concerts match yet — log one to start your collection.
+      {entries.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" size={17} />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t('collection.search')}
+              aria-label={t('collection.search')}
+              className="field rounded-full pl-10"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              aria-label={t('collection.sortBy')}
+              className="filter-select rounded-full px-3"
+            >
+              {SORTS.map((id) => (
+                <option key={id} value={id}>
+                  {t(`collection.sort.${id}`)}
+                </option>
+              ))}
+            </select>
+            <Chip active={favoritesOnly} onClick={() => setFavoritesOnly((v) => !v)}>
+              {t('collection.favorites')}
+            </Chip>
+            <Chip active={festivalsOnly} onClick={() => setFestivalsOnly((v) => !v)}>
+              {t('collection.festivals')}
+            </Chip>
+          </div>
+        </div>
+      )}
+
+      {entries.length === 0 ? (
+        <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border p-6">
+          <p className="text-muted">{t('collection.empty')}</p>
+          <Link href="/log" className="rounded-full bg-brand px-4 py-2 text-sm font-bold text-brand-foreground">
+            {t('collection.emptyCta')}
+          </Link>
+        </div>
+      ) : filtered.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted">{t('collection.noMatches')}</p>
+      ) : view === 'tickets' ? (
+        <div className="flex flex-col gap-3">
+          {filtered.map((entry) => (
+            <TicketStub key={entry.id} entry={entry} />
+          ))}
         </div>
       ) : (
-        <>
-          {/* Gallery view */}
-          {view === 'grid' && (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {filtered.map((concert) => (
-                <Link
-                  href={`/entry/${concert.id}`}
-                  key={concert.id}
-                  className="group relative aspect-square bg-surface rounded-xl overflow-hidden border border-border hover:border-muted transition cursor-pointer flex flex-col"
-                >
-                  <div className="flex-1 bg-surface-light flex items-center justify-center group-hover:opacity-80 transition overflow-hidden">
-                    {concert.coverUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={concert.coverUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <ImageIcon size={32} className="text-muted" />
-                    )}
-                  </div>
-                  <div className="bg-surface p-3 border-t border-border">
-                    <h3 className="font-bold truncate">{concert.artists?.name ?? 'Unknown artist'}</h3>
-                    <p className="text-xs text-muted">{concert.event_date}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-
-          {/* Compact view */}
-          {view === 'compact' && (
-            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {filtered.map((concert) => (
-                <Link
-                  href={`/entry/${concert.id}`}
-                  key={concert.id}
-                  className="group relative aspect-square bg-surface-light rounded-xl overflow-hidden border border-border hover:border-muted transition cursor-pointer flex items-center justify-center"
-                >
-                  {concert.coverUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={concert.coverUrl} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <ImageIcon size={22} className="text-muted" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {filtered.map((entry) => (
+            <Link
+              key={entry.id}
+              href={`/entry/${entry.id}`}
+              className="group relative aspect-[4/5] overflow-hidden rounded-xl bg-surface"
+            >
+              {entry.coverUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={entry.coverUrl}
+                  alt=""
+                  className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <Music2 size={28} className="text-muted" />
+                </div>
+              )}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background via-background/70 to-transparent p-3 pt-10">
+                <p className="marquee truncate text-2xl">{entry.artists?.name ?? t('common.unknownArtist')}</p>
+                <p className="flex items-center justify-between text-xs text-muted">
+                  <span>{date(entry.event_date)}</span>
+                  {entry.rating != null && (
+                    <span className="flex items-center gap-0.5 font-semibold text-brand">
+                      <Star size={11} className="fill-brand" /> {entry.rating}
+                    </span>
                   )}
-                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition flex items-center justify-center p-2">
-                    <span className="text-xs font-bold text-center">{concert.artists?.name ?? 'Unknown artist'}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-
-          {/* List view */}
-          {view === 'list' && (
-            <div className="flex flex-col border border-border rounded-2xl overflow-hidden">
-              {filtered.map((concert, i) => (
-                <Link
-                  href={`/entry/${concert.id}`}
-                  key={concert.id}
-                  className={`flex items-center gap-4 p-4 bg-surface hover:bg-surface-light transition cursor-pointer ${
-                    i !== filtered.length - 1 ? 'border-b border-border' : ''
-                  }`}
-                >
-                  <div className="w-12 h-12 rounded-lg bg-surface-light border border-border flex items-center justify-center shrink-0 overflow-hidden">
-                    {concert.coverUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={concert.coverUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <ImageIcon size={18} className="text-muted" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold truncate">{concert.artists?.name ?? 'Unknown artist'}</p>
-                    <p className="text-xs text-muted truncate">{concert.venues?.name}</p>
-                  </div>
-                  <p className="text-xs text-muted shrink-0">{concert.event_date}</p>
-                  {concert.rating != null && (
-                    <div className="flex items-center gap-1 text-brand font-bold shrink-0 w-12 justify-end">
-                      <Star size={14} className="fill-brand" /> {concert.rating}
-                    </div>
-                  )}
-                </Link>
-              ))}
-            </div>
-          )}
-        </>
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
       )}
     </main>
   );
 }
 
-function FilterField({ label, children }) {
+function Chip({ active, onClick, children }) {
   return (
-    <label className="flex flex-col gap-1 text-xs text-muted">
-      {label}
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full border px-3 py-1.5 text-sm transition ${
+        active ? 'border-brand bg-brand font-semibold text-brand-foreground' : 'border-border text-muted hover:text-foreground'
+      }`}
+    >
       {children}
-    </label>
+    </button>
   );
 }

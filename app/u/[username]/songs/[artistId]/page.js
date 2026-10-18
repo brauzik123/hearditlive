@@ -3,10 +3,12 @@ import { createClient } from '../../../../../utils/supabase/server';
 import { getProfileAccess } from '../../../../../utils/profileAccess';
 import { getArtistSongs } from '../../../../../utils/songsData';
 import ArtistSongsView from '../../../../../components/ArtistSongsView';
+import { getI18n } from '../../../../../i18n/server';
 
 export default async function UserArtistSongsPage({ params }) {
   const { username, artistId } = await params;
   const supabase = await createClient();
+  const { t } = await getI18n();
 
   const access = await getProfileAccess(supabase, username);
   if (!access) notFound();
@@ -21,7 +23,7 @@ export default async function UserArtistSongsPage({ params }) {
     <ArtistSongsView
       {...data}
       backHref={`/u/${profile.username}/songs`}
-      backLabel={`Back to ${profile.username}'s Songs`}
+      backLabel={t('songs.backToSongsOf', { name: profile.username })}
       readOnly
       ownerId={profile.id}
     />

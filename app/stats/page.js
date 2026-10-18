@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { ArrowLeft, Music, MapPin, Building2, Mic2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { createClient } from '../../utils/supabase/server';
+import { getI18n } from '../../i18n/server';
 
-function topCounts(items, keyFn, limit = 5) {
+function topCounts(items, keyFn, limit) {
   const counts = new Map();
   for (const item of items) {
     const key = keyFn(item);
@@ -11,37 +12,33 @@ function topCounts(items, keyFn, limit = 5) {
   }
   return Array.from(counts.entries())
     .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
     .slice(0, limit);
 }
 
-function RankedList({ items, renderCount }) {
-  if (items.length === 0) {
-    return <p className="text-sm text-muted italic">Nothing here yet — log a few shows to see this fill in.</p>;
+// Billing tiers, like a festival poster: one headliner, then smaller type
+// for each row further down the bill.
+const TIERS = [
+  { size: 1, className: 'text-6xl md:text-8xl text-brand' },
+  { size: 3, className: 'text-4xl md:text-5xl' },
+  { size: 5, className: 'text-2xl md:text-3xl' },
+  { size: 8, className: 'text-xl text-muted' },
+];
+
+function billing(artists) {
+  const rows = [];
+  let start = 0;
+  for (const tier of TIERS) {
+    const slice = artists.slice(start, start + tier.size);
+    if (slice.length) rows.push({ ...tier, artists: slice });
+    start += tier.size;
   }
-  const max = Math.max(...items.map((i) => i.count));
-  return (
-    <div className="flex flex-col gap-3">
-      {items.map((item, i) => (
-        <div key={`${item.name}-${i}`} className="flex items-center gap-3">
-          <span className="text-xs text-muted w-4 shrink-0">{i + 1}</span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="text-sm font-medium truncate">{item.name}</p>
-              <span className="text-xs text-muted shrink-0">{renderCount(item)}</span>
-            </div>
-            <div className="h-1.5 bg-surface-light rounded-full mt-1.5 overflow-hidden">
-              <div className="h-full bg-brand rounded-full" style={{ width: `${(item.count / max) * 100}%` }} />
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return rows;
 }
 
 export default async function Stats() {
   const supabase = await createClient();
+  const { t } = await getI18n();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -54,64 +51,87 @@ export default async function Stats() {
 
   const entries = attended ?? [];
   const entryIds = entries.map((e) => e.id);
-
   const { data: setlistRows } = entryIds.length
     ? await supabase.from('entry_setlist').select('song_name').in('entry_id', entryIds)
     : { data: [] };
 
-  const totalShows = entries.length;
-  const artistCount = new Set(entries.map((e) => e.artists?.name).filter(Boolean)).size;
-  const cityCount = new Set(entries.map((e) => e.venues?.city).filter(Boolean)).size;
-  const songsHeard = (setlistRows ?? []).length;
-
   const summary = [
-    { label: 'Shows logged', value: totalShows },
-    { label: 'Artists seen', value: artistCount },
-    { label: 'Songs heard live', value: songsHeard },
-    { label: 'Cities visited', value: cityCount },
-  ];
+    { value: entries.length, key: 'stats.showsLabel' },
+    { value: new Set(entries.map((e) => e.artists?.name).filter(Boolean)).size, key: 'stats.artistsLabel' },
+    { value: (setlistRows ?? []).length, key: 'stats.songsLabel' },
+    { value: new Set(entries.map((e) => e.venues?.city).filter(Boolean)).size, key: 'stats.citiesLabel' },
+  ].map((s) => ({ ...s, label: t(s.key, { count: s.value }) }));
 
-  const topArtists = topCounts(entries, (e) => e.artists?.name);
-  const topSongs = topCounts(setlistRows ?? [], (s) => s.song_name);
-  const topVenues = topCounts(entries, (e) => (e.venues?.name ? `${e.venues.name}, ${e.venues.city ?? ''}`.trim().replace(/,\s*$/, '') : null));
-  const topCities = topCounts(entries, (e) => e.venues?.city);
+  const lineup = billing(topCounts(entries, (e) => e.artists?.name, 17));
+  const topSongs = topCounts(setlistRows ?? [], (s) => s.song_name, 10);
+  const topVenues = topCounts(
+    entries,
+    (e) => (e.venues?.name ? [e.venues.name, e.venues.city].filter(Boolean).join(', ') : null),
+    5
+  );
+  const topCities = topCounts(entries, (e) => e.venues?.city, 5);
 
   return (
-    <main className="p-4 md:p-8 max-w-2xl mx-auto flex flex-col gap-8">
-      <Link href="/" className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition">
-        <ArrowLeft size={16} /> Back home
+    <main className="mx-auto flex max-w-3xl flex-col gap-12 px-4 py-6 md:py-10">
+      <Link href="/profile" className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground">
+        <ArrowLeft size={16} /> {t('friends.backToProfile')}
       </Link>
 
-      <h1 className="text-2xl font-bold">Your Stats</h1>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {summary.map((stat) => (
-          <div key={stat.label} className="bg-surface rounded-2xl p-4 text-center border border-border">
-            <p className="text-2xl font-bold text-brand">{stat.value}</p>
-            <p className="text-xs text-muted mt-1">{stat.label}</p>
+      <section className="flex flex-col items-center gap-6 rounded-2xl border border-border bg-surface px-5 py-10 text-center">
+        <h1 className="text-sm text-muted">{t('stats.lineupTitle')}</h1>
+        {lineup.length === 0 ? (
+          <p className="max-w-sm text-muted">{t('stats.empty')}</p>
+        ) : (
+          <div className="flex flex-col items-center gap-3">
+            {lineup.map((row) => (
+              <p key={row.size} className={`marquee flex flex-wrap justify-center gap-x-5 gap-y-1 ${row.className}`}>
+                {row.artists.map((a) => (
+                  <span key={a.name} title={t('stats.seenTimes', { count: a.count })}>
+                    {a.name}
+                  </span>
+                ))}
+              </p>
+            ))}
           </div>
-        ))}
+        )}
+        <dl className="mt-4 grid w-full grid-cols-2 gap-y-5 border-t border-dashed border-border pt-6 sm:grid-cols-4">
+          {summary.map((s) => (
+            <div key={s.label} className="flex flex-col items-center">
+              <dt className="order-2 text-sm text-muted">{s.label}</dt>
+              <dd className="marquee order-1 text-4xl">{s.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <RankedList title={t('stats.topSongs')} items={topSongs} countLabel={(n) => t('stats.timesHeard', { count: n })} />
+      <div className="grid gap-12 md:grid-cols-2">
+        <RankedList title={t('stats.topVenues')} items={topVenues} countLabel={(n) => t('stats.shows', { count: n })} />
+        <RankedList title={t('stats.topCities')} items={topCities} countLabel={(n) => t('stats.shows', { count: n })} />
       </div>
-
-      <section className="bg-surface rounded-2xl p-6 border border-border">
-        <h2 className="font-bold mb-4 flex items-center gap-2"><Mic2 size={16} /> Most Seen Artists</h2>
-        <RankedList items={topArtists} renderCount={(a) => `${a.count}x`} />
-      </section>
-
-      <section className="bg-surface rounded-2xl p-6 border border-border">
-        <h2 className="font-bold mb-4 flex items-center gap-2"><Music size={16} /> Most Heard Songs</h2>
-        <RankedList items={topSongs} renderCount={(s) => `${s.count}x`} />
-      </section>
-
-      <section className="bg-surface rounded-2xl p-6 border border-border">
-        <h2 className="font-bold mb-4 flex items-center gap-2"><Building2 size={16} /> Most Visited Venues</h2>
-        <RankedList items={topVenues} renderCount={(v) => `${v.count} shows`} />
-      </section>
-
-      <section className="bg-surface rounded-2xl p-6 border border-border">
-        <h2 className="font-bold mb-4 flex items-center gap-2"><MapPin size={16} /> Top Cities</h2>
-        <RankedList items={topCities} renderCount={(c) => `${c.count} shows`} />
-      </section>
     </main>
+  );
+}
+
+function RankedList({ title, items, countLabel }) {
+  if (items.length === 0) return null;
+  const max = items[0].count;
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="marquee text-3xl">{title}</h2>
+      <ol className="flex flex-col gap-3">
+        {items.map((item) => (
+          <li key={item.name} className="flex flex-col gap-1.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="truncate">{item.name}</span>
+              <span className="shrink-0 text-sm text-muted">{countLabel(item.count)}</span>
+            </div>
+            <div className="h-1 overflow-hidden rounded-full bg-surface">
+              <div className="h-full rounded-full bg-brand" style={{ width: `${(item.count / max) * 100}%` }} />
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }

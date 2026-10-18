@@ -1,15 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Lock, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
+import { useI18n } from '../../i18n/client';
 
 // Reached from the password-reset email (signed in by /auth/callback) or
 // from Settings → Change password.
 export default function ResetPassword() {
+  const { t } = useI18n();
   const router = useRouter();
-  const supabase = createClient();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
@@ -19,44 +21,48 @@ export default function ResetPassword() {
     e.preventDefault();
     setError('');
     if (password.length < 8) {
-      setError('Use at least 8 characters.');
+      setError(t('reset.tooShort'));
       return;
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError(t('login.errors.passwordsDiffer'));
       return;
     }
     setSaving(true);
-    const { error: updateError } = await supabase.auth.updateUser({ password });
+    const { error: updateError } = await createClient().auth.updateUser({ password });
     setSaving(false);
     if (updateError) {
-      setError(updateError.message);
+      setError(updateError.code === 'same_password' ? t('reset.samePassword') : t('login.errors.generic'));
       return;
     }
     router.push('/');
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-sm flex flex-col gap-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Choose a new password</h1>
-          <p className="text-muted text-sm mt-2">You&apos;ll use it the next time you log in.</p>
+    <main className="flex min-h-screen flex-col px-5 py-6">
+      <Link href="/settings" className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground">
+        <ArrowLeft size={16} /> {t('reset.back')}
+      </Link>
+      <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 py-10">
+        <div>
+          <h1 className="marquee text-5xl">{t('reset.title')}</h1>
+          <p className="mt-2 text-muted">{t('reset.subtitle')}</p>
         </div>
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3 bg-surface border border-border rounded-2xl p-6">
-          <PasswordField placeholder="New password" value={password} onChange={setPassword} />
-          <PasswordField placeholder="Confirm new password" value={confirmPassword} onChange={setConfirmPassword} />
-
-          {error && <p className="text-xs text-red-400">{error}</p>}
-
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <PasswordField label={t('reset.newPassword')} value={password} onChange={setPassword} />
+          <PasswordField label={t('reset.confirm')} value={confirmPassword} onChange={setConfirmPassword} />
+          {error && (
+            <p role="alert" className="text-sm text-danger">
+              {error}
+            </p>
+          )}
           <button
             type="submit"
             disabled={saving}
-            className="flex items-center justify-center gap-2 bg-brand text-brand-foreground font-bold rounded-full py-2.5 mt-1 hover:opacity-90 transition disabled:opacity-60"
+            className="mt-1 flex items-center justify-center gap-2 rounded-full bg-brand py-3 font-bold text-brand-foreground transition hover:brightness-105 disabled:opacity-60"
           >
             {saving && <Loader2 size={16} className="animate-spin" />}
-            Save password
+            {t('reset.save')}
           </button>
         </form>
       </div>
@@ -64,19 +70,18 @@ export default function ResetPassword() {
   );
 }
 
-function PasswordField({ value, onChange, placeholder }) {
+function PasswordField({ label, value, onChange }) {
   return (
-    <div className="relative">
-      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
+    <label className="flex flex-col gap-1.5 text-sm">
+      <span className="text-muted">{label}</span>
       <input
         type="password"
         required
         autoComplete="new-password"
-        placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-surface-light border border-border rounded-lg py-2.5 pl-10 pr-3 text-sm focus:outline-none focus:border-brand transition"
+        className="field"
       />
-    </div>
+    </label>
   );
 }

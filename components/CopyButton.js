@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
+import { useI18n } from '../i18n/client';
 
 export default function CopyButton({ text }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -15,9 +17,9 @@ export default function CopyButton({ text }) {
   return (
     <button
       onClick={handleCopy}
-      className="flex items-center gap-1.5 text-xs bg-surface-light border border-border rounded-full px-3 py-1.5 hover:border-brand transition"
+      className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium transition hover:border-brand"
     >
-      {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? 'Copied' : 'Copy'}
+      {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? t('common.copied') : t('common.copy')}
     </button>
   );
 }
