@@ -3,9 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Search, Music2, Loader2 } from 'lucide-react';
+import { Search, Music2, Loader2, ArrowLeft } from 'lucide-react';
 
-export default function SongsGrid({ artists }) {
+// Your own Songs (/songs) or someone else's (/u/[username]/songs). For
+// someone else, `owner` is { id, username } and the sync classifies their
+// heard songs instead of yours.
+export default function SongsGrid({ artists, basePath, owner = null }) {
   const [query, setQuery] = useState('');
   const [syncingIds, setSyncingIds] = useState(() => new Set(artists.filter((a) => a.needsSync).map((a) => a.id)));
   const router = useRouter();
@@ -28,7 +31,7 @@ export default function SongsGrid({ artists }) {
           await fetch('/api/catalog/sync-artist', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ artistId: artist.id }),
+            body: JSON.stringify({ artistId: artist.id, userId: owner?.id }),
           });
         } catch {
           // Ignore — tile just keeps showing whatever it already had.
@@ -53,9 +56,18 @@ export default function SongsGrid({ artists }) {
 
   return (
     <main className="p-4 md:p-8 max-w-5xl mx-auto flex flex-col gap-6">
+      {owner && (
+        <Link href={`/u/${owner.username}`} className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition">
+          <ArrowLeft size={16} /> Back to {owner.username}
+        </Link>
+      )}
       <div>
-        <h1 className="text-2xl font-bold">Songs</h1>
-        <p className="text-sm text-muted mt-1">Every artist you&apos;ve heard live, with how much of their catalog you&apos;ve covered.</p>
+        <h1 className="text-2xl font-bold">{owner ? `${owner.username}'s Songs` : 'Songs'}</h1>
+        <p className="text-sm text-muted mt-1">
+          {owner
+            ? `Every artist ${owner.username} has heard live, with how much of their catalog they've covered.`
+            : "Every artist you've heard live, with how much of their catalog you've covered."}
+        </p>
       </div>
 
       <div className="relative">
@@ -72,7 +84,9 @@ export default function SongsGrid({ artists }) {
       {filtered.length === 0 ? (
         <div className="flex items-center justify-center h-32 text-muted italic">
           {artists.length === 0
-            ? 'Log a concert with a setlist to start building this out.'
+            ? owner
+              ? 'Nothing to show yet.'
+              : 'Log a concert with a setlist to start building this out.'
             : 'No artists match your search.'}
         </div>
       ) : (
@@ -81,7 +95,7 @@ export default function SongsGrid({ artists }) {
             const syncing = syncingIds.has(artist.id);
             return (
               <Link
-                href={`/songs/${artist.id}`}
+                href={`${basePath}/${artist.id}`}
                 key={artist.id}
                 className="group relative bg-surface rounded-xl overflow-hidden border border-border hover:border-muted transition flex flex-col"
               >

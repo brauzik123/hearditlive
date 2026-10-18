@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import EntryRow from './EntryRow';
-import { User as UserIcon, Image as ImageIcon, Lock, Clock, UserCheck, UserPlus, UserMinus } from 'lucide-react';
+import { User as UserIcon, Image as ImageIcon, Lock, Clock, UserCheck, UserPlus, UserMinus, Music2 } from 'lucide-react';
 import { createClient } from '../utils/supabase/client';
 
 const FOLLOW_STATES = {
@@ -155,9 +155,17 @@ export default function OtherProfileView({
           <hr className="border-border" />
 
           <section className="flex flex-col gap-3">
-            <h2 className="font-bold text-lg">
-              {totalConcerts} {totalConcerts === 1 ? 'concert' : 'concerts'} logged
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-lg">
+                {totalConcerts} {totalConcerts === 1 ? 'concert' : 'concerts'} logged
+              </h2>
+              <Link
+                href={isSelf ? '/songs' : `/u/${profile.username}/songs`}
+                className="flex items-center gap-1.5 text-sm bg-surface border border-border rounded-full px-3 py-1.5 hover:border-brand transition"
+              >
+                <Music2 size={14} /> Songs heard live
+              </Link>
+            </div>
             {concerts.length === 0 ? (
               <p className="text-sm text-muted italic">Nothing to show yet.</p>
             ) : (

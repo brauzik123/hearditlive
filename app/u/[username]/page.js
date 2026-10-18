@@ -1,58 +1,36 @@
 import { notFound } from 'next/navigation';
 import OtherProfileView from '../../../components/OtherProfileView';
 import { createClient } from '../../../utils/supabase/server';
+import { getProfileAccess } from '../../../utils/profileAccess';
 
 export default async function OtherProfilePage({ params }) {
   const { username } = await params;
   const supabase = await createClient();
 
-  const {
-    data: { user: viewer },
-  } = await supabase.auth.getUser();
+  const access = await getProfileAccess(supabase, username);
+  if (!access) notFound();
+  const { viewer, profile, isSelf, canViewContent } = access;
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, username, bio, profile_visibility')
-    .ilike('username', username)
-    .maybeSingle();
-
-  if (!profile) notFound();
-
-  const isSelf = viewer?.id === profile.id;
-
-  const [{ count: followers }, { count: following }, { data: viewerFollowRow }, { data: isFriendRow }] =
-    await Promise.all([
-      supabase
-        .from('follows')
-        .select('*', { count: 'exact', head: true })
-        .eq('followee_id', profile.id)
-        .eq('status', 'accepted'),
-      supabase
-        .from('follows')
-        .select('*', { count: 'exact', head: true })
-        .eq('follower_id', profile.id)
-        .eq('status', 'accepted'),
-      viewer
-        ? supabase
-            .from('follows')
-            .select('status')
-            .eq('follower_id', viewer.id)
-            .eq('followee_id', profile.id)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-      viewer
-        ? supabase
-            .from('friendships')
-            .select('friend_id')
-            .eq('user_id', profile.id)
-            .eq('friend_id', viewer.id)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
-
-  const isFriend = !!isFriendRow;
-  const canViewContent =
-    isSelf || profile.profile_visibility === 'public' || (profile.profile_visibility === 'friends' && isFriend);
+  const [{ count: followers }, { count: following }, { data: viewerFollowRow }] = await Promise.all([
+    supabase
+      .from('follows')
+      .select('*', { count: 'exact', head: true })
+      .eq('followee_id', profile.id)
+      .eq('status', 'accepted'),
+    supabase
+      .from('follows')
+      .select('*', { count: 'exact', head: true })
+      .eq('follower_id', profile.id)
+      .eq('status', 'accepted'),
+    viewer
+      ? supabase
+          .from('follows')
+          .select('status')
+          .eq('follower_id', viewer.id)
+          .eq('followee_id', profile.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
 
   let favorites = [];
   let totalConcerts = 0;

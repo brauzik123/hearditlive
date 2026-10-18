@@ -73,7 +73,20 @@ function SongRow({ song, showOthersToggle, artistId }) {
   );
 }
 
-export default function ArtistSongsView({ artist, albums: allAlbums, singles, features, others, needsSync }) {
+// `readOnly` (someone else's Songs) hides the count/don't-count toggles;
+// `ownerId` makes the background sync classify that user's heard songs.
+export default function ArtistSongsView({
+  artist,
+  albums: allAlbums,
+  singles,
+  features,
+  others,
+  needsSync,
+  backHref,
+  backLabel = 'Back to Songs',
+  readOnly = false,
+  ownerId = null,
+}) {
   // Only show albums/EPs with at least one heard track — an untouched 0%
   // tile isn't useful clutter here (unlike the Songs grid, where every
   // heard artist should appear regardless of coverage).
@@ -92,7 +105,7 @@ export default function ArtistSongsView({ artist, albums: allAlbums, singles, fe
         await fetch('/api/catalog/sync-artist', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ artistId: artist.id }),
+          body: JSON.stringify({ artistId: artist.id, userId: ownerId }),
         });
       } catch {
         // Ignore — page just keeps showing whatever it already had.
@@ -116,8 +129,8 @@ export default function ArtistSongsView({ artist, albums: allAlbums, singles, fe
 
   return (
     <main className="p-4 md:p-8 max-w-5xl mx-auto flex flex-col gap-6">
-      <Link href="/songs" className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition">
-        <ArrowLeft size={16} /> Back to Songs
+      <Link href={backHref} className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition">
+        <ArrowLeft size={16} /> {backLabel}
       </Link>
 
       <div className="flex items-center gap-4">
@@ -200,7 +213,7 @@ export default function ArtistSongsView({ artist, albums: allAlbums, singles, fe
                 key={song.name}
                 song={song}
                 artistId={artist.id}
-                showOthersToggle={selected.type === 'others'}
+                showOthersToggle={!readOnly && selected.type === 'others'}
               />
             ))
           )}

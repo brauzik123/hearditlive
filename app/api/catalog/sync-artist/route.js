@@ -18,8 +18,12 @@ export async function POST(request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
 
-  const { artistId } = await request.json();
+  const { artistId, userId } = await request.json();
   if (typeof artistId !== 'string') return NextResponse.json({ error: 'artistId is required' }, { status: 400 });
+  // Whose heard songs to classify: yours by default, or the person whose
+  // Songs you're viewing. Their entries are read with *your* session, so
+  // only concerts you're allowed to see are used.
+  const ownerId = typeof userId === 'string' ? userId : user.id;
 
   const admin = createAdminClient();
   const [{ data: artist }, { data: entries }] = await Promise.all([
@@ -27,7 +31,7 @@ export async function POST(request) {
     supabase
       .from('concert_entries')
       .select('id')
-      .eq('user_id', user.id)
+      .eq('user_id', ownerId)
       .eq('artist_id', artistId)
       .eq('entry_type', 'attended'),
   ]);
