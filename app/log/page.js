@@ -97,8 +97,13 @@ function LogEntry() {
   const update = (patch) => setForm((f) => ({ ...f, ...patch }));
 
   useEffect(() => {
+    // Read ?edit= here rather than via useSearchParams: in this Next setup
+    // the Suspense boundary useSearchParams requires left the page stuck
+    // hidden. /log is prerendered, so this can't be initial state either
+    // (it'd mismatch on hydration) — one extra render is the cost.
     const id = new URLSearchParams(window.location.search).get('edit');
     if (!id) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEditId(id);
     setLoadingEntry(true);
     (async () => {
@@ -704,12 +709,17 @@ function SetlistfmImport({ form, update }) {
         });
       });
     });
+    // The chosen setlist is the source of truth for the show's details:
+    // override what was typed rather than leave e.g. a London venue on a
+    // Paris setlist. setlist.fm dates come as dd-MM-yyyy.
+    const [day, month, year] = (setlist.eventDate ?? '').split('-');
     update({
       setlist: songs,
       setlistfmId: setlist.id,
-      tourName: form.tourName || setlist.tourName || '',
-      venue: form.venue || setlist.venueName || '',
-      city: form.city || setlist.city || '',
+      tourName: setlist.tourName || form.tourName,
+      venue: setlist.venueName || form.venue,
+      city: setlist.city || form.city,
+      date: year && month && day ? `${year}-${month}-${day}` : form.date,
     });
     setOpen(false);
   };
