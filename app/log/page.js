@@ -273,8 +273,10 @@ function LogEntry() {
         if (tagsError) throw tagsError;
       }
 
+      // No router.refresh() here: firing it alongside push left the edit
+      // flow stuck on "Saving" — the entry page is dynamic and always
+      // renders fresh data anyway.
       router.push(`/entry/${entryId}`);
-      router.refresh();
     } catch (err) {
       setError(err.message ?? 'Something went wrong while saving.');
       setSaving(false);
@@ -290,7 +292,7 @@ function LogEntry() {
   }
 
   return (
-    <main className="p-4 md:p-8 max-w-2xl mx-auto flex flex-col gap-6 pb-28 md:pb-8">
+    <main className="p-4 md:p-8 max-w-2xl mx-auto flex flex-col gap-6 pb-36 md:pb-8">
       <div>
         <h1 className="text-2xl font-bold">{editId ? 'Edit Concert' : 'Log a Concert'}</h1>
         <p className="text-sm text-muted mt-1">

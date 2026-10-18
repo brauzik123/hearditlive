@@ -34,7 +34,7 @@ export default async function EntryDetail({ params }) {
        entry_setlist(song_name, position, is_encore),
        entry_attendees(guest_name),
        entry_tags(tags(name)),
-       profiles!concert_entries_user_id_fkey(default_entry_visibility)`
+       profiles!concert_entries_user_id_fkey(default_entry_visibility, profile_visibility)`
     )
     .eq('id', id)
     .maybeSingle();
@@ -42,8 +42,14 @@ export default async function EntryDetail({ params }) {
   if (!entry) notFound();
 
   const isOwner = user?.id === entry.user_id;
-  const effectiveVisibility =
+  // Mirrors entry_visible_to_viewer: the profile setting is a ceiling the
+  // entry's own setting can only narrow.
+  const RANK = { public: 0, friends: 1, private: 2 };
+  const entryVisibility =
     entry.visibility === 'inherit' ? entry.profiles?.default_entry_visibility ?? 'public' : entry.visibility;
+  const profileVisibility = entry.profiles?.profile_visibility ?? 'public';
+  const effectiveVisibility =
+    (RANK[profileVisibility] ?? 0) > (RANK[entryVisibility] ?? 0) ? profileVisibility : entryVisibility;
   const VisibilityIcon = visibilityMeta[effectiveVisibility]?.icon ?? Globe;
 
   const photos = (entry.entry_photos ?? []).sort((a, b) => a.position - b.position);

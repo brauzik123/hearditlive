@@ -19,17 +19,26 @@ function editionKey(release) {
   return `${isTile(release) ? 'tile' : 'single'}::${normalizeSongName(base)}`;
 }
 
-function pickEditions(releases) {
+// Live albums re-release songs that belong to studio albums ("Live at
+// Kilmainham Gaol"), so they'd steal those songs from their real home.
+const LIVE_RELEASE = /(^|\s|\(|\[|-\s*)live(\s+(at|from|in|on)\b|\s*[)\]]|$)/i;
+
+function pickEditions(allReleases) {
+  const releases = allReleases.filter((r) => !LIVE_RELEASE.test(r.name));
   const byKey = new Map();
   releases.forEach((release) => {
     const key = editionKey(release);
     const current = byKey.get(key);
     if (!current || release.total_tracks > current.total_tracks) byKey.set(key, release);
   });
-  // Albums first, then EPs, then singles: when a song appears on several
-  // releases, the first (most "canonical") one claims it.
+  // Albums first, then EPs, then singles, and oldest first within each:
+  // when a song appears on several releases, the first one claims it — so
+  // it stays with the album it originally came out on, not a later
+  // deluxe/expanded reissue under a different title.
   const rank = (r) => (r.album_type === 'album' ? 0 : isTile(r) ? 1 : 2);
-  return [...byKey.values()].sort((a, b) => rank(a) - rank(b));
+  return [...byKey.values()].sort(
+    (a, b) => rank(a) - rank(b) || (a.release_date ?? '').localeCompare(b.release_date ?? '')
+  );
 }
 
 function toDate(releaseDate) {

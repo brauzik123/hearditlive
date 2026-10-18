@@ -29,8 +29,13 @@ body {
   color: var(--foreground);
 }
 
-* {
-  border-color: var(--border);
+/* Default only: inside the base layer so border-* utilities (selected
+   states, focus rings, hover) can override it. Unlayered, it silently beat
+   every colored border class in the app. */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 }
 
 ::selection {

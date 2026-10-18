@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, User as UserIcon, Camera, Globe, UserCheck, Lock,
-  EyeOff, Music2, LogOut, Check, Loader2,
+  EyeOff, LogOut, Check, Loader2,
 } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
 
@@ -26,7 +26,6 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
-  const [passwordResetSent, setPasswordResetSent] = useState(false);
 
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -34,8 +33,6 @@ export default function Settings() {
   const [profileVisibility, setProfileVisibility] = useState('public');
   const [defaultEntryVisibility, setDefaultEntryVisibility] = useState('public');
   const [hideMediaDefault, setHideMediaDefault] = useState(false);
-  const [spotifyConnected, setSpotifyConnected] = useState(false);
-  const [appleMusicConnected, setAppleMusicConnected] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -60,13 +57,6 @@ export default function Settings() {
         setDefaultEntryVisibility(profile.default_entry_visibility ?? 'public');
         setHideMediaDefault(!!profile.hide_entry_media_default);
       }
-
-      const { data: accounts } = await supabase
-        .from('linked_music_accounts')
-        .select('provider')
-        .eq('user_id', user.id);
-      setSpotifyConnected(!!accounts?.some((a) => a.provider === 'spotify'));
-      setAppleMusicConnected(!!accounts?.some((a) => a.provider === 'apple_music'));
 
       setLoading(false);
     })();
@@ -102,13 +92,6 @@ export default function Settings() {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const handleChangePassword = async () => {
-    if (!email) return;
-    await supabase.auth.resetPasswordForEmail(email);
-    setPasswordResetSent(true);
-    setTimeout(() => setPasswordResetSent(false), 4000);
-  };
-
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push('/login');
@@ -124,7 +107,7 @@ export default function Settings() {
   }
 
   return (
-    <main className="p-4 md:p-8 max-w-2xl mx-auto flex flex-col gap-8 pb-24">
+    <main className="p-4 md:p-8 max-w-2xl mx-auto flex flex-col gap-8 pb-40 md:pb-28">
       <Link href="/profile" className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition">
         <ArrowLeft size={16} /> Back to profile
       </Link>
@@ -217,29 +200,16 @@ export default function Settings() {
 
       <hr className="border-border" />
 
-      {/* Linked accounts */}
-      <section className="flex flex-col gap-3">
-        <h2 className="font-bold text-lg">Linked Music Accounts</h2>
-        <p className="text-xs text-muted -mt-2">
-          Connecting these needs Spotify/Apple Developer credentials that only you can provide — ask me once you have them.
-        </p>
-
-        <LinkedAccountRow label="Spotify" connected={spotifyConnected} />
-        <LinkedAccountRow label="Apple Music" connected={appleMusicConnected} />
-      </section>
-
-      <hr className="border-border" />
-
       {/* Account */}
       <section className="flex flex-col gap-3">
         <h2 className="font-bold text-lg">Account</h2>
         <p className="text-xs text-muted -mt-1">{email}</p>
-        <button
-          onClick={handleChangePassword}
+        <Link
+          href="/reset-password"
           className="flex items-center justify-center gap-2 bg-surface border border-border rounded-lg py-2.5 text-sm font-medium hover:border-muted transition"
         >
-          {passwordResetSent ? 'Reset email sent — check your inbox' : 'Change password'}
-        </button>
+          Change password
+        </Link>
         <button
           onClick={handleSignOut}
           className="flex items-center justify-center gap-2 bg-surface border border-border rounded-lg py-2.5 text-sm font-medium text-red-400 hover:border-red-400 transition"
@@ -262,22 +232,5 @@ export default function Settings() {
         </div>
       </div>
     </main>
-  );
-}
-
-function LinkedAccountRow({ label, connected }) {
-  return (
-    <div className="flex items-center justify-between bg-surface border border-border rounded-lg px-4 py-3">
-      <span className="flex items-center gap-2 text-sm font-medium">
-        <Music2 size={16} className="text-muted" /> {label}
-      </span>
-      <button
-        disabled
-        title="Requires provider API credentials"
-        className="text-xs font-bold rounded-full px-3 py-1.5 bg-surface-light border border-border text-muted cursor-not-allowed"
-      >
-        {connected ? 'Disconnect' : 'Connect'}
-      </button>
-    </div>
   );
 }

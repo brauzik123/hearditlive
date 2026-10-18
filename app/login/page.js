@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, User as UserIcon, Apple, Loader2 } from 'lucide-react';
+import { Mail, Lock, User as UserIcon, Loader2 } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
 
 export default function Login() {
@@ -32,6 +32,25 @@ export default function Login() {
       provider: 'google',
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
+  };
+
+  // The emailed link signs the user in via /auth/callback, which then
+  // forwards to /reset-password to choose a new one.
+  const handleForgotPassword = async () => {
+    setError('');
+    setInfo('');
+    if (!email.trim()) {
+      setError('Enter your email above first, then tap "Forgot your password?" again.');
+      return;
+    }
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+    });
+    if (resetError) {
+      setError(resetError.message);
+      return;
+    }
+    setInfo('If an account exists for that email, a reset link is on its way.');
   };
 
   const handleSubmit = async (e) => {
@@ -98,7 +117,11 @@ export default function Login() {
           )}
 
           {isLogin && (
-            <button type="button" className="text-xs text-muted hover:text-foreground transition self-end -mt-1">
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              className="text-xs text-muted hover:text-foreground transition self-end -mt-1"
+            >
               Forgot your password?
             </button>
           )}
@@ -121,14 +144,6 @@ export default function Login() {
             <hr className="flex-1 border-border" />
           </div>
 
-          <button
-            type="button"
-            disabled
-            title="Coming soon — requires Apple Sign In configuration"
-            className="flex items-center justify-center gap-2 bg-surface-light border border-border rounded-full py-2.5 text-sm font-medium text-muted cursor-not-allowed"
-          >
-            <Apple size={16} /> Sign in with Apple
-          </button>
           <button
             type="button"
             onClick={handleGoogleSignIn}
