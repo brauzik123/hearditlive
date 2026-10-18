@@ -7,6 +7,7 @@ const SYNC_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 // Spotify files EPs under album_type "single"; anything this long gets its
 // own tile like an album (Spotify's own EP threshold).
 const EP_MIN_TRACKS = 4;
+const MAX_SONG_LOOKUPS_PER_SYNC = 50;
 
 function isTile(release) {
   return release.album_type === 'album' || release.total_tracks >= EP_MIN_TRACKS;
@@ -49,11 +50,62 @@ function toDate(releaseDate) {
   return releaseDate;
 }
 
+// A claim older than this is assumed abandoned (crashed/timed-out request).
+const SYNC_CLAIM_TTL_MS = 2 * 60 * 1000;
+// After a failed sync: wait 10 min, then 1 h, then 6 h, capped at 1 day.
+function backoffMs(failCount) {
+  return Math.min(10 * 60 * 1000 * 6 ** Math.max(failCount - 1, 0), 24 * 60 * 60 * 1000);
+}
+
+export function isInBackoff(artist) {
+  return (
+    !!artist.sync_failed_at &&
+    Date.now() - new Date(artist.sync_failed_at).getTime() < backoffMs(artist.sync_fail_count)
+  );
+}
+
+async function recordFailure(supabase, artist) {
+  await supabase
+    .from('artists')
+    .update({
+      sync_started_at: null,
+      sync_failed_at: new Date().toISOString(),
+      sync_fail_count: (artist.sync_fail_count ?? 0) + 1,
+    })
+    .eq('id', artist.id);
+}
+
 export async function ensureArtistSynced(supabase, artist) {
   const syncedRecently =
     artist.catalog_synced_at && Date.now() - new Date(artist.catalog_synced_at).getTime() < SYNC_MAX_AGE_MS;
   if (syncedRecently) return artist;
+  if (isInBackoff(artist)) return artist;
 
+  // Atomically claim the sync; if another request holds a live claim, let
+  // it do the work instead of syncing the same artist twice.
+  const staleBefore = new Date(Date.now() - SYNC_CLAIM_TTL_MS).toISOString();
+  const { data: claimed } = await supabase
+    .from('artists')
+    .update({ sync_started_at: new Date().toISOString() })
+    .eq('id', artist.id)
+    .or(`sync_started_at.is.null,sync_started_at.lt.${staleBefore}`)
+    .select('id');
+  if (!claimed?.length) return artist;
+
+  try {
+    const synced = await syncCatalog(supabase, artist);
+    await supabase
+      .from('artists')
+      .update({ sync_started_at: null, sync_failed_at: null, sync_fail_count: 0 })
+      .eq('id', artist.id);
+    return synced;
+  } catch (err) {
+    await recordFailure(supabase, artist);
+    throw err;
+  }
+}
+
+async function syncCatalog(supabase, artist) {
   const resolved = await ensureArtistImage(supabase, artist);
   const releases = resolved.spotify_id ? pickEditions(await getArtistReleases(resolved.spotify_id)) : [];
 
@@ -116,15 +168,24 @@ export async function resolveHeardSongsForArtist(supabase, artist, heardNames) {
   });
   if (!unmatched.length) return;
 
-  const rows = await mapLimit(unmatched, 4, async (name) => {
+  // Bounded per sync, so a setlist full of made-up names can't fan out into
+  // hundreds of Spotify searches at once; the rest resolve on later visits.
+  const batch = unmatched.slice(0, MAX_SONG_LOOKUPS_PER_SYNC);
+  let aborted = false;
+  const results = await mapLimit(batch, 4, async (name) => {
     const base = { artist_id: artist.id, name, album_id: null, spotify_track_id: null, is_feature: false };
     if (!artist.spotify_id) return base;
+    if (aborted) return null;
 
     let candidates = [];
     try {
       candidates = await searchTracks(name, artist.name);
     } catch {
-      return base;
+      // A failed lookup (e.g. rate limit) isn't evidence the song is
+      // unknown: skip it rather than file it under Others for good, and
+      // stop issuing further searches this round.
+      aborted = true;
+      return null;
     }
     const target = normalizeSongName(name);
     const hit = candidates.find(
@@ -138,6 +199,13 @@ export async function resolveHeardSongsForArtist(supabase, artist, heardNames) {
 
   // Two heard names can resolve to the same track; the second becomes an
   // unmatched row instead of tripping the (artist_id, spotify_track_id) index.
+  if (aborted) {
+    await recordFailure(supabase, artist);
+  } else if (artist.sync_fail_count) {
+    await supabase.from('artists').update({ sync_failed_at: null, sync_fail_count: 0 }).eq('id', artist.id);
+  }
+  const rows = results.filter(Boolean);
+  if (!rows.length) return;
   const usedTrackIds = new Set();
   const deduped = rows.map((row) => {
     if (!row.spotify_track_id) return row;

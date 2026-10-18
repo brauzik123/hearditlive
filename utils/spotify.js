@@ -36,15 +36,25 @@ async function getAccessToken() {
   return cachedToken.accessToken;
 }
 
-async function spotifyFetch(path) {
+// Spotify sometimes answers 429 with a Retry-After of minutes or hours;
+// waiting that out would hang the request, so only short waits are retried
+// and anything longer fails the sync (which then backs off — see
+// catalogSync.js).
+const MAX_RETRY_WAIT_S = 10;
+const MAX_RETRIES = 3;
+
+async function spotifyFetch(path, attempt = 0) {
   const token = await getAccessToken();
   const res = await fetch(`https://api.spotify.com/v1${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (res.status === 429) {
     const retryAfter = Number(res.headers.get('Retry-After') ?? '1');
+    if (retryAfter > MAX_RETRY_WAIT_S || attempt >= MAX_RETRIES) {
+      throw new Error(`Spotify rate limit (retry after ${retryAfter}s)`);
+    }
     await new Promise((r) => setTimeout(r, retryAfter * 1000));
-    return spotifyFetch(path);
+    return spotifyFetch(path, attempt + 1);
   }
   if (!res.ok) throw new Error(`Spotify API error ${res.status} for ${path}`);
   return res.json();
@@ -77,16 +87,30 @@ export function bestImage(images) {
   return images[0].url; // Spotify returns images sorted largest-first
 }
 
+const RECHECK_UNKNOWN_ARTIST_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 // Resolves spotify_id + a photo URL for an artist and caches it on the row.
+// "Not on Spotify" is cached too (spotify_checked_at), otherwise every view
+// of a local band would search Spotify again.
 export async function ensureArtistImage(supabase, artist) {
   if (artist.spotify_id) return artist;
+  const checkedRecently =
+    artist.spotify_checked_at && Date.now() - new Date(artist.spotify_checked_at).getTime() < RECHECK_UNKNOWN_ARTIST_MS;
+  if (checkedRecently) return artist;
 
   const match = await searchArtist(artist.name);
-  if (!match) return artist;
+  const checkedAt = new Date().toISOString();
+  if (!match) {
+    await supabase.from('artists').update({ spotify_checked_at: checkedAt }).eq('id', artist.id);
+    return { ...artist, spotify_checked_at: checkedAt };
+  }
 
   const imageUrl = bestImage(match.images);
-  await supabase.from('artists').update({ spotify_id: match.id, image_url: imageUrl }).eq('id', artist.id);
-  return { ...artist, spotify_id: match.id, image_url: imageUrl };
+  await supabase
+    .from('artists')
+    .update({ spotify_id: match.id, image_url: imageUrl, spotify_checked_at: checkedAt })
+    .eq('id', artist.id);
+  return { ...artist, spotify_id: match.id, image_url: imageUrl, spotify_checked_at: checkedAt };
 }
 
 const PAGE_SIZE = 10;
