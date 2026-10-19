@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
 import { useI18n } from '../../i18n/client';
+import { newId } from '../../utils/id';
 
 const STEPS = ['basics', 'details', 'media', 'people'];
 
@@ -145,7 +146,7 @@ function LogEntry() {
         setlist: (entry.entry_setlist ?? [])
           .sort((a, b) => a.position - b.position)
           .map((s) => ({
-            id: crypto.randomUUID(),
+            id: newId(),
             name: s.song_name,
             isEncore: !!s.is_encore,
             isCover: !!s.is_cover,
@@ -247,7 +248,7 @@ function LogEntry() {
         const photo = form.photos[i];
         let url = photo.url;
         if (photo.file) {
-          const path = `${user.id}/${entryId}/${crypto.randomUUID()}-${photo.file.name}`;
+          const path = `${user.id}/${entryId}/${newId()}-${photo.file.name}`;
           const { error: uploadError } = await supabase.storage
             .from('entry-photos')
             .upload(path, photo.file);
@@ -576,7 +577,7 @@ function DetailsSection({ form, update }) {
 function MediaSetlistSection({ form, update }) {
   const addPhotos = (fileList) => {
     const newPhotos = Array.from(fileList).map((file) => ({
-      id: crypto.randomUUID(),
+      id: newId(),
       file,
       previewUrl: URL.createObjectURL(file),
       url: null,
@@ -590,7 +591,7 @@ function MediaSetlistSection({ form, update }) {
 
   const addSong = () =>
     update({
-      setlist: [...form.setlist, { id: crypto.randomUUID(), name: '', isEncore: false, isCover: false, coverOriginalArtist: null }],
+      setlist: [...form.setlist, { id: newId(), name: '', isEncore: false, isCover: false, coverOriginalArtist: null }],
     });
   const updateSong = (id, name) =>
     update({ setlist: form.setlist.map((s) => (s.id === id ? { ...s, name } : s)) });
@@ -716,7 +717,7 @@ function SetlistfmImport({ form, update }) {
     setlist.sets.forEach((set) => {
       set.songs.forEach((song) => {
         songs.push({
-          id: crypto.randomUUID(),
+          id: newId(),
           name: song.name,
           isEncore: set.isEncore,
           isCover: song.isCover,
