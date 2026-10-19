@@ -10,6 +10,9 @@ const securityHeaders = [
 
 const nextConfig = {
   reactCompiler: true,
+  // Lets phones on the home network open the dev server by this PC's LAN
+  // address (dev only; no effect on production builds).
+  allowedDevOrigins: ['192.168.1.12'],
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },
