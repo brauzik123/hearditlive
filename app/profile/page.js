@@ -24,7 +24,7 @@ export default async function Profile() {
     { data: friendRows },
     { count: pendingRequests },
   ] = await Promise.all([
-    supabase.from('profiles').select('username, bio, profile_visibility').eq('id', user.id).single(),
+    supabase.from('profiles').select('username, bio, avatar_url, profile_visibility').eq('id', user.id).single(),
     // friend_code isn't selectable directly (it'd be visible to everyone).
     supabase.rpc('my_friend_code'),
     supabase.from('follows').select('*', { count: 'exact', head: true }).eq('followee_id', user.id).eq('status', 'accepted'),
@@ -47,7 +47,7 @@ export default async function Profile() {
 
   const friendIds = (friendRows ?? []).map((f) => f.friend_id);
   const { data: friendProfiles } = friendIds.length
-    ? await supabase.from('profiles').select('id, username').in('id', friendIds)
+    ? await supabase.from('profiles').select('id, username, avatar_url').in('id', friendIds)
     : { data: [] };
   const friends = friendProfiles ?? [];
 
@@ -55,6 +55,7 @@ export default async function Profile() {
     <main className="mx-auto flex max-w-2xl flex-col gap-10 px-4 py-6 md:py-10">
       <ProfileHeader
         username={profile?.username}
+        avatarUrl={profile?.avatar_url}
         bio={profile?.bio}
         shows={shows ?? 0}
         followers={followers ?? 0}
@@ -132,7 +133,7 @@ export default async function Profile() {
           <div className="scrollbar-thin flex gap-4 overflow-x-auto pb-2">
             {friends.map((f) => (
               <Link key={f.id} href={`/u/${f.username}`} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
-                <Avatar username={f.username} size={56} />
+                <Avatar username={f.username} src={f.avatar_url} size={56} />
                 <span className="w-full truncate text-center text-xs text-muted">{f.username}</span>
               </Link>
             ))}

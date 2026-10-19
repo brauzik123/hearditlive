@@ -1,21 +1,23 @@
 'use client';
 
 import { createContext, useContext, useMemo } from 'react';
-import { LOCALE_COOKIE, formatDate, makeT, timeAgo } from './translate';
+import { DATE_FORMAT_COOKIE, LOCALE_COOKIE, formatDate, makeT, stubDate, timeAgo } from './translate';
 
 const I18nContext = createContext(null);
 
-// The root layout picks the locale on the server and hands the dictionary
-// down, so client components translate without loading anything.
-export function I18nProvider({ locale, dict, children }) {
+// The root layout picks the locale and date format on the server and hands
+// them down, so client components translate without loading anything.
+export function I18nProvider({ locale, dateFormat, dict, children }) {
   const value = useMemo(
     () => ({
       locale,
+      dateFormat,
       t: makeT(dict, locale),
-      date: (iso, options) => formatDate(iso, locale, options),
+      date: (iso, options) => formatDate(iso, locale, options, dateFormat),
+      stub: (iso) => stubDate(iso, locale, dateFormat),
       ago: (iso) => timeAgo(iso, locale),
     }),
-    [locale, dict]
+    [locale, dateFormat, dict]
   );
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
@@ -26,8 +28,11 @@ export function useI18n() {
   return value;
 }
 
-// Saves the choice for a year; callers then router.refresh() so server
-// components re-render in the new language.
-export function saveLocale(locale) {
-  document.cookie = `${LOCALE_COOKIE}=${locale}; path=/; max-age=31536000; samesite=lax`;
+// Preferences are saved for a year; callers then router.refresh() so
+// server components re-render with the new value.
+function savePreference(name, value) {
+  document.cookie = `${name}=${value}; path=/; max-age=31536000; samesite=lax`;
 }
+
+export const saveLocale = (locale) => savePreference(LOCALE_COOKIE, locale);
+export const saveDateFormat = (format) => savePreference(DATE_FORMAT_COOKIE, format);

@@ -65,6 +65,7 @@ export default function OtherProfileView({
     <main className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-6 md:py-10">
       <ProfileHeader
         username={profile.username}
+        avatarUrl={profile.avatar_url}
         bio={canViewContent ? profile.bio : null}
         shows={canViewContent ? totalConcerts : null}
         followers={followers}

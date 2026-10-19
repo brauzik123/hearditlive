@@ -27,7 +27,7 @@ export default async function EntryDetail({ params }) {
        entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist),
        entry_attendees(guest_name),
        entry_tags(tags(name)),
-       profiles!concert_entries_user_id_fkey(username, default_entry_visibility, profile_visibility)`
+       profiles!concert_entries_user_id_fkey(username, avatar_url, default_entry_visibility, profile_visibility)`
     )
     .eq('id', id)
     .maybeSingle();
@@ -98,7 +98,7 @@ export default async function EntryDetail({ params }) {
           )}
           {!isOwner && ownerName && (
             <Link href={`/u/${ownerName}`} className="flex items-center gap-2 hover:text-foreground">
-              <Avatar username={ownerName} size={22} /> {t('entry.loggedBy', { name: ownerName })}
+              <Avatar username={ownerName} src={entry.profiles?.avatar_url} size={22} /> {t('entry.loggedBy', { name: ownerName })}
             </Link>
           )}
         </div>

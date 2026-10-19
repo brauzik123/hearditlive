@@ -13,7 +13,7 @@ import { useI18n } from '../i18n/client';
 // `meta` (e.g. "2 days ago") are optional, pre-rendered strings. `asLink`
 // is off on the entry's own page, where the ticket is the header.
 export default function TicketStub({ entry, byline, meta, size = 'md', asLink = true }) {
-  const { t, date } = useI18n();
+  const { t, stub } = useI18n();
   const artist = entry.artists?.name ?? t('common.unknownArtist');
   const venue = [entry.venues?.name, entry.venues?.city].filter(Boolean).join(', ');
   const planned = entry.entry_type === 'planned';
@@ -38,11 +38,7 @@ export default function TicketStub({ entry, byline, meta, size = 'md', asLink = 
 
       <div className="ticket-stub shrink-0 flex flex-col items-center justify-center gap-1 py-3 text-center">
         {entry.event_date ? (
-          <>
-            <span className="marquee text-3xl">{date(entry.event_date, { day: 'numeric' })}</span>
-            <span className="text-xs leading-none">{date(entry.event_date, { month: 'short' })}</span>
-            <span className="text-[11px] leading-none text-paper-muted">{date(entry.event_date, { year: 'numeric' })}</span>
-          </>
+          <StubDate parts={stub(entry.event_date)} />
         ) : (
           <span className="marquee text-xl">{t('ticket.dateTba')}</span>
         )}
@@ -59,5 +55,20 @@ export default function TicketStub({ entry, byline, meta, size = 'md', asLink = 
         )}
       </div>
     </Wrapper>
+  );
+}
+
+// Date on the stub, laid out for the preferred format: "3 / Sept / 2024"
+// for the spelled-out format, "03.09 / 2024" style for numeric ones.
+function StubDate({ parts }) {
+  const small = <span className="text-[11px] leading-none text-paper-muted">{parts.small}</span>;
+  const numeric = !parts.middle;
+  return (
+    <>
+      {parts.smallFirst && small}
+      <span className={`marquee ${numeric ? 'text-2xl' : 'text-3xl'}`}>{parts.big}</span>
+      {parts.middle && <span className="text-xs leading-none">{parts.middle}</span>}
+      {!parts.smallFirst && small}
+    </>
   );
 }

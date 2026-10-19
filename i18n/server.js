@@ -2,7 +2,17 @@ import 'server-only';
 import { cookies, headers } from 'next/headers';
 import en from './dictionaries/en';
 import pl from './dictionaries/pl';
-import { DEFAULT_LOCALE, LOCALE_COOKIE, LOCALES, formatDate, makeT, timeAgo } from './translate';
+import {
+  DATE_FORMATS,
+  DATE_FORMAT_COOKIE,
+  DEFAULT_DATE_FORMAT,
+  DEFAULT_LOCALE,
+  LOCALE_COOKIE,
+  LOCALES,
+  formatDate,
+  makeT,
+  timeAgo,
+} from './translate';
 
 const DICTIONARIES = { en, pl };
 
@@ -20,17 +30,23 @@ export async function getLocale() {
   return preferred ?? DEFAULT_LOCALE;
 }
 
+export async function getDateFormat() {
+  const saved = (await cookies()).get(DATE_FORMAT_COOKIE)?.value;
+  return DATE_FORMATS.includes(saved) ? saved : DEFAULT_DATE_FORMAT;
+}
+
 export function getDictionary(locale) {
   return DICTIONARIES[locale] ?? DICTIONARIES[DEFAULT_LOCALE];
 }
 
 // Everything a server component needs to render localized text.
 export async function getI18n() {
-  const locale = await getLocale();
+  const [locale, dateFormat] = await Promise.all([getLocale(), getDateFormat()]);
   return {
     locale,
+    dateFormat,
     t: makeT(getDictionary(locale), locale),
-    date: (iso, options) => formatDate(iso, locale, options),
+    date: (iso, options) => formatDate(iso, locale, options, dateFormat),
     ago: (iso) => timeAgo(iso, locale),
   };
 }

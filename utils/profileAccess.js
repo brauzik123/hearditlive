@@ -12,7 +12,7 @@ export async function getProfileAccess(supabase, username) {
   const pattern = username.replace(/[\\%_]/g, (c) => `\\${c}`);
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, username, bio, profile_visibility')
+    .select('id, username, bio, avatar_url, profile_visibility')
     .ilike('username', pattern)
     .maybeSingle();
   if (!profile) return null;

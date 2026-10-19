@@ -8,7 +8,8 @@ import { createClient } from '../../utils/supabase/client';
 import { useI18n } from '../../i18n/client';
 import DeleteAccountSection from '../../components/DeleteAccountSection';
 import LanguageSwitch from '../../components/LanguageSwitch';
-import Avatar from '../../components/Avatar';
+import DateFormatSwitch from '../../components/DateFormatSwitch';
+import AvatarEditor from '../../components/AvatarEditor';
 
 const PROFILE_VISIBILITY = [
   { value: 'public', icon: Globe },
@@ -28,6 +29,7 @@ export default function Settings() {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState(null);
   const [profileVisibility, setProfileVisibility] = useState('public');
   const [defaultEntryVisibility, setDefaultEntryVisibility] = useState('public');
   const [hideMediaDefault, setHideMediaDefault] = useState(false);
@@ -43,13 +45,14 @@ export default function Settings() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username, bio, profile_visibility, default_entry_visibility, hide_entry_media_default')
+        .select('username, bio, avatar_url, profile_visibility, default_entry_visibility, hide_entry_media_default')
         .eq('id', user.id)
         .single();
 
       if (profile) {
         setUsername(profile.username ?? '');
         setBio(profile.bio ?? '');
+        setAvatarUrl(profile.avatar_url ?? null);
         setProfileVisibility(profile.profile_visibility ?? 'public');
         setDefaultEntryVisibility(profile.default_entry_visibility ?? 'public');
         setHideMediaDefault(!!profile.hide_entry_media_default);
@@ -115,13 +118,11 @@ export default function Settings() {
       </div>
 
       <Section title={t('settings.profile')}>
-        <div className="flex items-center gap-4">
-          <Avatar username={username} size={64} />
-          <label className="flex flex-1 flex-col gap-1.5 text-sm">
-            <span className="text-muted">{t('settings.username')}</span>
-            <input className="field" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
-          </label>
-        </div>
+        <AvatarEditor username={username} avatarUrl={avatarUrl} onChange={setAvatarUrl} />
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="text-muted">{t('settings.username')}</span>
+          <input className="field" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+        </label>
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="text-muted">{t('settings.bio')}</span>
           <textarea
@@ -135,8 +136,13 @@ export default function Settings() {
         </label>
       </Section>
 
-      <Section title={t('settings.language')}>
+      <Section title={t('settings.regional')}>
         <LanguageSwitch />
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-muted">{t('settings.dateFormat')}</p>
+          <DateFormatSwitch />
+        </div>
+        <p className="text-xs text-muted">{t('settings.deviceNote')}</p>
       </Section>
 
       <Section title={t('settings.privacy')}>

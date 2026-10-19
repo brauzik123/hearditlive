@@ -32,12 +32,52 @@ export function makeT(dict, locale) {
 
 const INTL_LOCALE = { en: 'en-GB', pl: 'pl-PL' };
 
-export function formatDate(isoDate, locale, options = { day: 'numeric', month: 'short', year: 'numeric' }) {
-  if (!isoDate) return '';
+// Preferred date format (Settings → Date format), kept in a cookie like
+// the language. "long" spells the month out in the current language.
+export const DATE_FORMATS = ['long', 'dmy', 'mdy', 'iso'];
+export const DEFAULT_DATE_FORMAT = 'long';
+export const DATE_FORMAT_COOKIE = 'datefmt';
+
+function toDate(isoDate) {
   // Dates like "2024-09-03" have no time; pin them to UTC noon so no
   // timezone can roll them over to the neighbouring day.
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(isoDate) ? new Date(`${isoDate}T12:00:00Z`) : new Date(isoDate);
-  return date.toLocaleDateString(INTL_LOCALE[locale] ?? locale, options);
+  return /^\d{4}-\d{2}-\d{2}$/.test(isoDate) ? new Date(`${isoDate}T12:00:00Z`) : new Date(isoDate);
+}
+
+function parts(isoDate) {
+  const d = toDate(isoDate);
+  const pad = (n) => String(n).padStart(2, '0');
+  return { day: pad(d.getUTCDate()), month: pad(d.getUTCMonth() + 1), year: String(d.getUTCFullYear()) };
+}
+
+// Full date in the user's preferred format. Passing `options` asks for a
+// specific Intl piece instead (e.g. just the month name on a ticket stub).
+export function formatDate(isoDate, locale, options, dateFormat = DEFAULT_DATE_FORMAT) {
+  if (!isoDate) return '';
+  if (!options && dateFormat !== 'long') {
+    const { day, month, year } = parts(isoDate);
+    if (dateFormat === 'dmy') return `${day}.${month}.${year}`;
+    if (dateFormat === 'mdy') return `${month}/${day}/${year}`;
+    return `${year}-${month}-${day}`;
+  }
+  return toDate(isoDate).toLocaleDateString(
+    INTL_LOCALE[locale] ?? locale,
+    options ?? { day: 'numeric', month: 'short', year: 'numeric' }
+  );
+}
+
+// The two lines on a ticket stub: a big one and a small one, ordered to
+// match the preferred format.
+export function stubDate(isoDate, locale, dateFormat = DEFAULT_DATE_FORMAT) {
+  const { day, month, year } = parts(isoDate);
+  if (dateFormat === 'dmy') return { big: `${day}.${month}`, small: year };
+  if (dateFormat === 'mdy') return { big: `${month}/${day}`, small: year };
+  if (dateFormat === 'iso') return { big: `${month}-${day}`, small: year, smallFirst: true };
+  return {
+    big: String(Number(day)),
+    middle: formatDate(isoDate, locale, { month: 'short' }),
+    small: year,
+  };
 }
 
 export function timeAgo(isoTimestamp, locale) {

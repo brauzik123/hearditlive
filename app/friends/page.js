@@ -38,7 +38,7 @@ export default function Friends() {
           supabase.from('friendships').select('friend_id').eq('user_id', user.id),
           supabase
             .from('follows')
-            .select('follower_id, profiles!follows_follower_id_fkey(username)')
+            .select('follower_id, profiles!follows_follower_id_fkey(username, avatar_url)')
             .eq('followee_id', user.id)
             .eq('status', 'pending'),
           supabase.from('follows').select('followee_id, status').eq('follower_id', user.id),
@@ -47,11 +47,11 @@ export default function Friends() {
 
       const friendIds = (friendRows ?? []).map((f) => f.friend_id);
       const { data: friendProfiles } = friendIds.length
-        ? await supabase.from('profiles').select('id, username').in('id', friendIds)
+        ? await supabase.from('profiles').select('id, username, avatar_url').in('id', friendIds)
         : { data: [] };
       setFriends(friendProfiles ?? []);
 
-      const pending = (requestRows ?? []).map((r) => ({ followerId: r.follower_id, username: r.profiles?.username }));
+      const pending = (requestRows ?? []).map((r) => ({ followerId: r.follower_id, username: r.profiles?.username, avatarUrl: r.profiles?.avatar_url }));
       setRequests(pending);
       if (pending.length) setTab('requests');
 
@@ -72,7 +72,7 @@ export default function Friends() {
       }
       const { data } = await createClient()
         .from('profiles')
-        .select('id, username, profile_visibility')
+        .select('id, username, avatar_url, profile_visibility')
         .ilike('username', `%${query.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`)
         .neq('id', me.id)
         .limit(10);
@@ -133,7 +133,7 @@ export default function Friends() {
       setRequests((r) => r.filter((req) => req.followerId !== request.followerId));
       // Accepting makes them a follower; they're a friend only if you follow back.
       if (followingMap[request.followerId] === 'accepted') {
-        setFriends((f) => [...f, { id: request.followerId, username: request.username }]);
+        setFriends((f) => [...f, { id: request.followerId, username: request.username, avatar_url: request.avatarUrl }]);
       }
     }
   };
@@ -198,7 +198,7 @@ export default function Friends() {
             {friends.map((f) => (
               <li key={f.id} className="border-b border-border last:border-b-0">
                 <Link href={`/u/${f.username}`} className="flex items-center gap-3 py-3 hover:text-brand">
-                  <Avatar username={f.username} size={40} />
+                  <Avatar username={f.username} src={f.avatar_url} size={40} />
                   <span className="font-medium">{f.username}</span>
                 </Link>
               </li>
@@ -214,7 +214,7 @@ export default function Friends() {
             {requests.map((r) => (
               <li key={r.followerId} className="flex items-center gap-3 border-b border-border py-3 last:border-b-0">
                 <Link href={`/u/${r.username}`} className="flex flex-1 items-center gap-3 hover:text-brand">
-                  <Avatar username={r.username} size={40} />
+                  <Avatar username={r.username} src={r.avatarUrl} size={40} />
                   <span className="font-medium">{r.username}</span>
                 </Link>
                 <button
@@ -283,7 +283,7 @@ export default function Friends() {
                 return (
                   <li key={result.id} className="flex items-center gap-3 border-b border-border py-3 last:border-b-0">
                     <Link href={`/u/${result.username}`} className="flex flex-1 items-center gap-3 hover:text-brand">
-                      <Avatar username={result.username} size={40} />
+                      <Avatar username={result.username} src={result.avatar_url} size={40} />
                       <span className="font-medium">{result.username}</span>
                     </Link>
                     {status ? (

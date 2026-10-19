@@ -2,7 +2,7 @@ import { Big_Shoulders, Instrument_Sans } from 'next/font/google';
 import './globals.css';
 import ConditionalNavBar from '../components/ConditionalNavBar';
 import { I18nProvider } from '../i18n/client';
-import { getDictionary, getLocale } from '../i18n/server';
+import { getDateFormat, getDictionary, getLocale } from '../i18n/server';
 
 // Marquee face for artist names, dates and numbers; a clean sans for the
 // rest. Both include latin-ext for Polish (ą ć ę ł ń ó ś ź ż).
@@ -28,11 +28,11 @@ export async function generateMetadata() {
 }
 
 export default async function RootLayout({ children }) {
-  const locale = await getLocale();
+  const [locale, dateFormat] = await Promise.all([getLocale(), getDateFormat()]);
   return (
     <html lang={locale} className={`${marquee.variable} ${body.variable}`}>
       <body className="font-sans pb-20 md:pb-0 md:pt-16">
-        <I18nProvider locale={locale} dict={getDictionary(locale)}>
+        <I18nProvider locale={locale} dateFormat={dateFormat} dict={getDictionary(locale)}>
           <ConditionalNavBar />
           {children}
         </I18nProvider>
