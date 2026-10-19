@@ -1,4 +1,14 @@
-import { ensureArtistImage, getArtistReleases, getAlbumTracks, searchTracks, bestImage, mapLimit } from './spotify';
+import {
+  ensureArtistImage,
+  getArtistReleases,
+  getAlbumTracks,
+  searchTracks,
+  bestImage,
+  mapLimit,
+  spotifyBlockedUntil,
+  blockSpotify,
+  SpotifyRateLimitError,
+} from './spotify';
 import { normalizeSongName } from './normalize';
 
 export { normalizeSongName };
@@ -80,6 +90,8 @@ export async function ensureArtistSynced(supabase, artist) {
     artist.catalog_synced_at && Date.now() - new Date(artist.catalog_synced_at).getTime() < SYNC_MAX_AGE_MS;
   if (syncedRecently) return artist;
   if (isInBackoff(artist)) return artist;
+  // Spotify has the whole app paused: wait it out without calling it.
+  if (await spotifyBlockedUntil(supabase)) return artist;
 
   // Atomically claim the sync; if another request holds a live claim, let
   // it do the work instead of syncing the same artist twice.
@@ -100,6 +112,13 @@ export async function ensureArtistSynced(supabase, artist) {
       .eq('id', artist.id);
     return synced;
   } catch (err) {
+    // A rate limit is about the app, not this artist: pause everything
+    // until Spotify says so, and let this artist retry right after.
+    if (err instanceof SpotifyRateLimitError) {
+      await blockSpotify(supabase, err.retryAfterSeconds);
+      await supabase.from('artists').update({ sync_started_at: null }).eq('id', artist.id);
+      return artist;
+    }
     await recordFailure(supabase, artist);
     throw err;
   }
@@ -168,10 +187,13 @@ export async function resolveHeardSongsForArtist(supabase, artist, heardNames) {
   });
   if (!unmatched.length) return;
 
+  if (artist.spotify_id && (await spotifyBlockedUntil(supabase))) return;
+
   // Bounded per sync, so a setlist full of made-up names can't fan out into
   // hundreds of Spotify searches at once; the rest resolve on later visits.
   const batch = unmatched.slice(0, MAX_SONG_LOOKUPS_PER_SYNC);
   let aborted = false;
+  let rateLimit = null;
   const results = await mapLimit(batch, 4, async (name) => {
     const base = { artist_id: artist.id, name, album_id: null, spotify_track_id: null, is_feature: false };
     if (!artist.spotify_id) return base;
@@ -180,11 +202,12 @@ export async function resolveHeardSongsForArtist(supabase, artist, heardNames) {
     let candidates = [];
     try {
       candidates = await searchTracks(name, artist.name);
-    } catch {
+    } catch (err) {
       // A failed lookup (e.g. rate limit) isn't evidence the song is
       // unknown: skip it rather than file it under Others for good, and
       // stop issuing further searches this round.
       aborted = true;
+      if (err instanceof SpotifyRateLimitError) rateLimit = err;
       return null;
     }
     const target = normalizeSongName(name);
@@ -199,7 +222,9 @@ export async function resolveHeardSongsForArtist(supabase, artist, heardNames) {
 
   // Two heard names can resolve to the same track; the second becomes an
   // unmatched row instead of tripping the (artist_id, spotify_track_id) index.
-  if (aborted) {
+  if (rateLimit) {
+    await blockSpotify(supabase, rateLimit.retryAfterSeconds);
+  } else if (aborted) {
     await recordFailure(supabase, artist);
   } else if (artist.sync_fail_count) {
     await supabase.from('artists').update({ sync_failed_at: null, sync_fail_count: 0 }).eq('id', artist.id);

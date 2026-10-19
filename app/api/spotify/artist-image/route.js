@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '../../../../utils/supabase/server';
 import { createAdminClient } from '../../../../utils/supabase/admin';
-import { ensureArtistImage } from '../../../../utils/spotify';
+import { blockSpotify, ensureArtistImage, spotifyBlockedUntil, SpotifyRateLimitError } from '../../../../utils/spotify';
 
 export async function POST(request) {
   const supabase = await createClient();
@@ -17,10 +17,14 @@ export async function POST(request) {
   const { data: artist } = await admin.from('artists').select('*').eq('id', artistId).maybeSingle();
   if (!artist) return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
 
+  if (artist.image_url || (await spotifyBlockedUntil(admin))) {
+    return NextResponse.json({ imageUrl: artist.image_url ?? null });
+  }
   try {
     const resolved = await ensureArtistImage(admin, artist);
     return NextResponse.json({ imageUrl: resolved.image_url ?? null });
-  } catch {
+  } catch (err) {
+    if (err instanceof SpotifyRateLimitError) await blockSpotify(admin, err.retryAfterSeconds);
     return NextResponse.json({ imageUrl: null });
   }
 }

@@ -43,6 +43,26 @@ async function getAccessToken() {
 const MAX_RETRY_WAIT_S = 10;
 const MAX_RETRIES = 3;
 
+export class SpotifyRateLimitError extends Error {
+  constructor(retryAfterSeconds) {
+    super(`Spotify rate limit (retry after ${retryAfterSeconds}s)`);
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+// App-wide pause (service_status table): while Spotify has us blocked,
+// nothing calls it at all, instead of every artist failing on its own.
+export async function spotifyBlockedUntil(supabase) {
+  const { data } = await supabase.from('service_status').select('blocked_until').eq('service', 'spotify').maybeSingle();
+  const until = data?.blocked_until ? new Date(data.blocked_until) : null;
+  return until && until > new Date() ? until : null;
+}
+
+export async function blockSpotify(supabase, retryAfterSeconds) {
+  const until = new Date(Date.now() + retryAfterSeconds * 1000).toISOString();
+  await supabase.from('service_status').upsert({ service: 'spotify', blocked_until: until });
+}
+
 async function spotifyFetch(path, attempt = 0) {
   const token = await getAccessToken();
   const res = await fetch(`https://api.spotify.com/v1${path}`, {
@@ -51,7 +71,7 @@ async function spotifyFetch(path, attempt = 0) {
   if (res.status === 429) {
     const retryAfter = Number(res.headers.get('Retry-After') ?? '1');
     if (retryAfter > MAX_RETRY_WAIT_S || attempt >= MAX_RETRIES) {
-      throw new Error(`Spotify rate limit (retry after ${retryAfter}s)`);
+      throw new SpotifyRateLimitError(retryAfter);
     }
     await new Promise((r) => setTimeout(r, retryAfter * 1000));
     return spotifyFetch(path, attempt + 1);

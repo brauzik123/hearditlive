@@ -180,5 +180,8 @@ export async function getArtistSongs(supabase, userId, artistId) {
     features: features.sort((a, b) => b.count - a.count),
     others: others.sort((a, b) => b.count - a.count),
     needsSync,
+    // No discography yet (first sync pending, or Spotify unavailable):
+    // everything heard sits in Others until it arrives.
+    catalogMissing: !artist.catalog_synced_at,
   };
 }

@@ -268,6 +268,7 @@ const en = {
     noMatches: 'No artists match.',
     syncing: 'Updating',
     syncingCatalog: 'Getting the full discography…',
+    catalogPending: 'This artist’s discography couldn’t be loaded from Spotify yet, so for now every song is under Other songs. They’ll be sorted into albums automatically once it loads.',
     heardCount: { one: '{count} song heard', other: '{count} songs heard' },
     playsCount: { one: '({count} play)', other: '({count} plays)' },
     timesHeard: { one: 'once', other: '{count}×' },

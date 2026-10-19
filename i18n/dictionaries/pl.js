@@ -275,6 +275,7 @@ const pl = {
     noMatches: 'Brak pasujących wykonawców.',
     syncing: 'Aktualizacja',
     syncingCatalog: 'Pobieram pełną dyskografię…',
+    catalogPending: 'Nie udało się jeszcze pobrać dyskografii tego wykonawcy ze Spotify, więc na razie wszystkie piosenki są w Innych piosenkach. Zostaną automatycznie przypisane do albumów, gdy dyskografia się wczyta.',
     heardCount: {
       one: '{count} usłyszana piosenka',
       few: '{count} usłyszane piosenki',

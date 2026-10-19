@@ -101,6 +101,7 @@ export default function ArtistSongsView({
   features,
   others,
   needsSync,
+  catalogMissing = false,
   backHref,
   backLabel,
   readOnly = false,
@@ -176,6 +177,12 @@ export default function ArtistSongsView({
           )}
         </div>
       </div>
+
+      {catalogMissing && !syncing && (
+        <p role="status" className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted">
+          {t('songs.catalogPending')}
+        </p>
+      )}
 
       {groups.length === 0 ? (
         !syncing && <p className="text-sm text-muted">{t('songs.nothingYet')}</p>
