@@ -36,7 +36,10 @@ export async function searchCities(query, lang) {
   });
   const results = (data.geonames ?? []).map((g) => ({
     geonameId: Number(g.geonameId),
-    name: g.name,
+    // With lang=en GeoNames can pick an odd crowd-sourced alias (Warsaw
+    // comes back as "Warszaw"); the main toponym name is the reliable
+    // English label. Polish names come back correctly.
+    name: lang === 'en' ? g.toponymName || g.name : g.name,
     region: g.adminName1 || null,
     country: g.countryName || null,
   }));
