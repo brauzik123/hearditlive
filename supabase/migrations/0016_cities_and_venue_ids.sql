@@ -3,7 +3,7 @@
 --
 -- cities: one row per GeoNames place (the same ids setlist.fm uses), with
 -- names in each app language. Filled server-side from the GeoNames API.
-create table cities (
+create table if not exists cities (
   geoname_id   bigint primary key,
   name_en      text not null,
   name_pl      text,
@@ -14,15 +14,15 @@ create table cities (
 );
 
 alter table cities enable row level security;
+drop policy if exists "cities readable" on cities;
 create policy "cities readable" on cities for select using (true);
 
--- Venues point at their city, and remember setlist.fm's venue id so every
--- import of the same venue lands on one row. venues.city (text) stays as
--- the fallback for places GeoNames doesn't know.
-alter table venues
-  add column city_id bigint references cities (geoname_id),
-  add column setlistfm_id text unique;
-create index venues_city_idx on venues (city_id);
+-- Venues point at their city. venues.setlistfm_id (unique) already exists
+-- from the initial schema and is now actually filled, so every import of
+-- the same venue lands on one row. venues.city (text) stays as the
+-- fallback for places GeoNames doesn't know.
+alter table venues add column if not exists city_id bigint references cities (geoname_id);
+create index if not exists venues_city_idx on venues (city_id);
 
 -- Venues are now created only through the server (/api/venues/resolve),
 -- which validates setlist.fm and GeoNames ids. A client could otherwise
