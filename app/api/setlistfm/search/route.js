@@ -68,6 +68,9 @@ export async function GET(request) {
   const data = await res.json();
   const setlists = (data.setlist ?? []).map((s) => ({
     id: s.id,
+    // Attribution link setlist.fm's API terms require us to show with
+    // their data.
+    url: s.url ?? 'https://www.setlist.fm/',
     eventDate: s.eventDate,
     artistName: s.artist?.name,
     venueName: s.venue?.name,

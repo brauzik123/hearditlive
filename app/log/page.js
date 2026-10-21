@@ -39,6 +39,7 @@ const emptyForm = {
   tags: [],
   visibility: 'inherit',
   setlistfmId: null,
+  setlistfmUrl: null,
 };
 
 export default function LogPage() {
@@ -201,6 +202,7 @@ function LogEntry() {
         tags: (entry.entry_tags ?? []).map((tag) => tag.tags?.name).filter(Boolean),
         visibility: entry.visibility ?? 'inherit',
         setlistfmId: entry.setlistfm_id ?? null,
+        setlistfmUrl: entry.setlistfm_url ?? null,
       });
       setLoadingEntry(false);
 
@@ -252,6 +254,7 @@ function LogEntry() {
         is_favorite: form.isFavorite,
         visibility: form.visibility,
         setlistfm_id: form.setlistfmId,
+        setlistfm_url: form.setlistfmUrl,
       };
 
       let entryId = editId;
@@ -929,6 +932,7 @@ function SetlistfmImport({ form, update }) {
     update({
       setlist: songs,
       setlistfmId: setlist.id,
+      setlistfmUrl: setlist.url,
       tourName: setlist.tourName || form.tourName,
       venue: setlist.venueName || form.venue,
       city: setlist.city || form.city,
@@ -965,7 +969,12 @@ function SetlistfmImport({ form, update }) {
       {open && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold">{t('log.importMatches')}</p>
+            <p className="text-xs font-semibold">
+              {t('log.importMatchesFrom')}{' '}
+              <a href="https://www.setlist.fm/" target="_blank" rel="noopener" className="text-brand underline-offset-2 hover:underline">
+                setlist.fm
+              </a>
+            </p>
             <button onClick={() => setOpen(false)} aria-label={t('common.close')} className="text-muted hover:text-foreground">
               <X size={14} />
             </button>

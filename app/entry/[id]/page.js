@@ -130,9 +130,22 @@ export default async function EntryDetail({ params }) {
 
       {setlist.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="marquee text-3xl">
-            {t('entry.setlist')} <span className="text-muted">{setlist.length}</span>
-          </h2>
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="marquee text-3xl">
+              {t('entry.setlist')} <span className="text-muted">{setlist.length}</span>
+            </h2>
+            {/* Required by setlist.fm's API terms wherever their data is shown. */}
+            {entry.setlistfm_id && (
+              <a
+                href={entry.setlistfm_url ?? 'https://www.setlist.fm/'}
+                target="_blank"
+                rel="noopener"
+                className="shrink-0 text-sm text-muted underline-offset-2 hover:text-foreground hover:underline"
+              >
+                {t('entry.setlistVia')}
+              </a>
+            )}
+          </div>
           <ol className="flex flex-col">
             {mainSet.map((song, i) => (
               <SetlistRow key={`m-${i}`} number={i + 1} song={song} t={t} />
