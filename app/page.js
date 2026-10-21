@@ -3,8 +3,9 @@ import { Plus } from 'lucide-react';
 import { createClient } from '../utils/supabase/server';
 import { getI18n } from '../i18n/server';
 import TicketStub from '../components/TicketStub';
+import { countOutings } from '../utils/outings';
 
-const ENTRY_FIELDS = 'id, entry_type, event_date, rating, ticket_status, created_at, artists(name), venues(name, city)';
+const ENTRY_FIELDS = 'id, entry_type, event_date, rating, ticket_status, created_at, artists(name), venues(name, city, city_id, cities(name_en, name_pl))';
 
 export default async function Home() {
   const supabase = await createClient();
@@ -18,7 +19,7 @@ export default async function Home() {
   const [{ data: attended }, { data: lastShowRows }, { data: upcoming }, { data: followRows }] = await Promise.all([
     supabase
       .from('concert_entries')
-      .select('artist_id, venues(city)')
+      .select('id, artist_id, festival_id, event_date, venues(city, city_id)')
       .eq('user_id', user.id)
       .eq('entry_type', 'attended'),
     supabase
@@ -53,9 +54,14 @@ export default async function Home() {
     : { data: [] };
   const feed = feedRows ?? [];
 
-  const shows = attended?.length ?? 0;
+  // Festivals count once per year, like the Stats page.
+  const shows = countOutings(attended ?? []);
   const artists = new Set((attended ?? []).map((e) => e.artist_id).filter(Boolean)).size;
-  const cities = new Set((attended ?? []).map((e) => e.venues?.city).filter(Boolean)).size;
+  const cities = new Set(
+    (attended ?? [])
+      .map((e) => (e.venues?.city_id ? `id:${e.venues.city_id}` : e.venues?.city?.trim().toLowerCase()))
+      .filter(Boolean)
+  ).size;
 
   const nextShow = upcoming?.[0];
   const laterShows = (upcoming ?? []).slice(1);
@@ -81,7 +87,7 @@ export default async function Home() {
           <h1 className="text-sm font-medium text-muted">{nextShow ? t('home.nextUp') : t('home.lastShow')}</h1>
           <TicketStub entry={heroEntry} size="lg" />
           <Link href="/stats" className="group mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-            <Stat value={shows} label={t('home.statShows', { count: shows })} />
+            <Stat value={shows} label={t('home.statEvents', { count: shows })} />
             <Stat value={artists} label={t('home.statArtists', { count: artists })} />
             <Stat value={cities} label={t('home.statCities', { count: cities })} />
             <span className="text-sm text-muted underline-offset-4 group-hover:text-foreground group-hover:underline">

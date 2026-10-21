@@ -22,7 +22,7 @@ export default async function EntryDetail({ params }) {
   const { data: entry } = await supabase
     .from('concert_entries')
     .select(
-      `*, artists(name), venues(name, city), festivals(name),
+      `*, artists(name), venues(name, city, city_id, cities(name_en, name_pl)), festivals(name),
        entry_photos(id, url, caption, position),
        entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist),
        entry_attendees(guest_name),

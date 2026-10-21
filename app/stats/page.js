@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { createClient } from '../../utils/supabase/server';
 import { getI18n } from '../../i18n/server';
+import { cityName } from '../../utils/placeNames';
+import { countOutings, topByOutings } from '../../utils/outings';
 
 function topCounts(items, keyFn, limit) {
   const counts = new Map();
@@ -38,14 +40,14 @@ function billing(artists) {
 
 export default async function Stats() {
   const supabase = await createClient();
-  const { t } = await getI18n();
+  const { t, locale } = await getI18n();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const { data: attended } = await supabase
     .from('concert_entries')
-    .select('id, artists(name), venues(name, city)')
+    .select('id, festival_id, event_date, venue_id, artists(name), venues(name, city, city_id, cities(name_en, name_pl))')
     .eq('user_id', user.id)
     .eq('entry_type', 'attended');
 
@@ -55,21 +57,27 @@ export default async function Stats() {
     ? await supabase.from('entry_setlist').select('song_name').in('entry_id', entryIds)
     : { data: [] };
 
+  // Cities and venues are counted by identity (a linked GeoNames city, a
+  // venue row), so "Warsaw" and "Warszawa" are one city; festivals count
+  // once per year (see utils/outings.js).
+  const cityKey = (e) => (e.venues?.city_id ? `id:${e.venues.city_id}` : e.venues?.city?.trim().toLowerCase() || null);
   const summary = [
+    { value: countOutings(entries), key: 'stats.eventsLabel' },
     { value: entries.length, key: 'stats.showsLabel' },
     { value: new Set(entries.map((e) => e.artists?.name).filter(Boolean)).size, key: 'stats.artistsLabel' },
     { value: (setlistRows ?? []).length, key: 'stats.songsLabel' },
-    { value: new Set(entries.map((e) => e.venues?.city).filter(Boolean)).size, key: 'stats.citiesLabel' },
+    { value: new Set(entries.map(cityKey).filter(Boolean)).size, key: 'stats.citiesLabel' },
   ].map((s) => ({ ...s, label: t(s.key, { count: s.value }) }));
 
   const lineup = billing(topCounts(entries, (e) => e.artists?.name, 17));
   const topSongs = topCounts(setlistRows ?? [], (s) => s.song_name, 10);
-  const topVenues = topCounts(
+  const topVenues = topByOutings(
     entries,
-    (e) => (e.venues?.name ? [e.venues.name, e.venues.city].filter(Boolean).join(', ') : null),
+    (e) => e.venue_id,
+    (e) => [e.venues?.name, cityName(e.venues, locale)].filter(Boolean).join(', '),
     5
   );
-  const topCities = topCounts(entries, (e) => e.venues?.city, 5);
+  const topCities = topByOutings(entries, cityKey, (e) => cityName(e.venues, locale), 5);
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-12 px-4 py-6 md:py-10">
@@ -94,7 +102,7 @@ export default async function Stats() {
             ))}
           </div>
         )}
-        <dl className="mt-4 grid w-full grid-cols-2 gap-y-5 border-t border-dashed border-border pt-6 sm:grid-cols-4">
+        <dl className="mt-4 grid w-full grid-cols-3 gap-y-5 border-t border-dashed border-border pt-6 sm:grid-cols-5">
           {summary.map((s) => (
             <div key={s.label} className="flex flex-col items-center">
               <dt className="order-2 text-sm text-muted">{s.label}</dt>
@@ -106,8 +114,8 @@ export default async function Stats() {
 
       <RankedList title={t('stats.topSongs')} items={topSongs} countLabel={(n) => t('stats.timesHeard', { count: n })} />
       <div className="grid gap-12 md:grid-cols-2">
-        <RankedList title={t('stats.topVenues')} items={topVenues} countLabel={(n) => t('stats.shows', { count: n })} />
-        <RankedList title={t('stats.topCities')} items={topCities} countLabel={(n) => t('stats.shows', { count: n })} />
+        <RankedList title={t('stats.topVenues')} items={topVenues} countLabel={(n) => t('stats.visits', { count: n })} />
+        <RankedList title={t('stats.topCities')} items={topCities} countLabel={(n) => t('stats.visits', { count: n })} />
       </div>
     </main>
   );

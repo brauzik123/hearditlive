@@ -10,6 +10,7 @@ import { createClient } from '../../utils/supabase/client';
 import { useI18n } from '../../i18n/client';
 import { newId } from '../../utils/id';
 import { shrinkImage } from '../../utils/image';
+import { cityName } from '../../utils/placeNames';
 import StarRating from '../../components/StarRating';
 
 const STEPS = ['basics', 'details', 'media', 'people'];
@@ -21,6 +22,8 @@ const emptyForm = {
   artist: '',
   venue: '',
   city: '',
+  cityGeonameId: null, // GeoNames id once a city is picked or imported
+  setlistfmVenueId: null, // setlist.fm venue id from an import
   date: '',
   tourName: '',
   isFestival: false,
@@ -53,14 +56,21 @@ async function resolveArtist(supabase, name) {
   return created.id;
 }
 
-async function resolveVenue(supabase, name, city) {
-  let query = supabase.from('venues').select('id').ilike('name', exact(name));
-  query = city ? query.ilike('city', exact(city)) : query.is('city', null);
-  const { data: existing } = await query.limit(1).maybeSingle();
-  if (existing) return existing.id;
-  const { data: created, error } = await supabase.from('venues').insert({ name, city: city || null }).select('id').single();
-  if (error) throw error;
-  return created.id;
+// Venues are matched and created on the server (see /api/venues/resolve).
+async function resolveVenue(form) {
+  const res = await fetch('/api/venues/resolve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: form.venue.trim(),
+      cityText: form.city.trim(),
+      cityGeonameId: form.cityGeonameId,
+      setlistfmVenueId: form.setlistfmVenueId,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error);
+  return data.id;
 }
 
 async function resolveFestival(supabase, name, city) {
@@ -92,7 +102,7 @@ async function resolveTag(supabase, userId, name) {
 function LogEntry() {
   const supabase = createClient();
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [step, setStep] = useState(0);
@@ -142,7 +152,7 @@ function LogEntry() {
       const { data: entry, error: fetchError } = await supabase
         .from('concert_entries')
         .select(
-          `*, artists(name), venues(name, city), festivals(name),
+          `*, artists(name), venues(name, city, city_id, setlistfm_id, cities(name_en, name_pl)), festivals(name),
            entry_photos(id, url, caption, position, is_cover),
            entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist),
            entry_attendees(guest_name),
@@ -165,7 +175,9 @@ function LogEntry() {
         entryType: entry.entry_type,
         artist: entry.artists?.name ?? '',
         venue: entry.venues?.name ?? '',
-        city: entry.venues?.city ?? '',
+        city: entry.venues ? cityName(entry.venues, locale) : '',
+        cityGeonameId: entry.venues?.city_id ?? null,
+        setlistfmVenueId: entry.venues?.setlistfm_id ?? null,
         date: entry.event_date ?? '',
         tourName: entry.tour_name ?? '',
         isFestival: !!entry.festivals,
@@ -220,7 +232,7 @@ function LogEntry() {
       if (!user) throw new Error('Not signed in.');
 
       const artistId = form.artist.trim() ? await resolveArtist(supabase, form.artist.trim()) : null;
-      const venueId = form.venue.trim() ? await resolveVenue(supabase, form.venue.trim(), form.city.trim()) : null;
+      const venueId = form.venue.trim() ? await resolveVenue(form) : null;
       const festivalId =
         form.isFestival && form.festivalName.trim()
           ? await resolveFestival(supabase, form.festivalName.trim(), form.city.trim())
@@ -515,22 +527,8 @@ function BasicsSection({ form, update, myFestivals }) {
       {attended && <SetlistfmImport form={form} update={update} />}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Field label={t('log.venue')} icon={MapPin}>
-          <input
-            className="field"
-            placeholder={t('log.venuePlaceholder')}
-            value={form.venue}
-            onChange={(e) => update({ venue: e.target.value })}
-          />
-        </Field>
-        <Field label={t('log.city')}>
-          <input
-            className="field"
-            placeholder={t('log.cityPlaceholder')}
-            value={form.city}
-            onChange={(e) => update({ city: e.target.value })}
-          />
-        </Field>
+        <CityInput form={form} update={update} />
+        <VenueInput form={form} update={update} />
         <Field label={t('log.tour')}>
           <input
             className="field"
@@ -934,6 +932,8 @@ function SetlistfmImport({ form, update }) {
       tourName: setlist.tourName || form.tourName,
       venue: setlist.venueName || form.venue,
       city: setlist.city || form.city,
+      cityGeonameId: setlist.cityGeonameId ?? form.cityGeonameId,
+      setlistfmVenueId: setlist.venueId ?? null,
       date: setlistfmDateToIso(setlist.eventDate) ?? form.date,
     });
     setImportedCount(songs.length);
@@ -1077,5 +1077,170 @@ function FriendsPrivacySection({ form, update }) {
         </select>
       </Field>
     </Section>
+  );
+}
+
+// Suggestion list under an input; closes on pick or outside tap.
+function Suggestions({ items, onPick, render }) {
+  if (!items.length) return null;
+  return (
+    <ul className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-xl border border-border bg-surface shadow-[0_12px_32px_-12px_rgba(0,0,0,0.6)]">
+      {items.map((item, i) => (
+        <li key={i}>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onPick(item)}
+            className="w-full px-3 py-2.5 text-left text-sm hover:bg-surface-light"
+          >
+            {render(item)}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// City with GeoNames suggestions. Picking one links the city to its
+// GeoNames id, so the same city always counts once whatever it's called.
+function CityInput({ form, update }) {
+  const { t, locale } = useI18n();
+  const [focused, setFocused] = useState(false);
+  const [results, setResults] = useState([]);
+  const query = form.city.trim();
+
+  useEffect(() => {
+    if (!focused || form.cityGeonameId || query.length < 2) return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/cities/search?${new URLSearchParams({ q: query, lang: locale })}`, {
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        setResults(data.cities ?? []);
+      } catch {
+        // Aborted or offline: keep the field as plain text.
+      }
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, focused, form.cityGeonameId, locale]);
+
+  const visible = focused && !form.cityGeonameId && query.length >= 2 ? results : [];
+
+  return (
+    <div className="flex flex-col gap-1.5 text-sm">
+      <span className="flex items-center gap-1.5 text-muted">
+        <MapPin size={14} /> {t('log.city')}
+      </span>
+      <div className="relative">
+        <input
+          className="field"
+          placeholder={t('log.cityPlaceholder')}
+          value={form.city}
+          aria-label={t('log.city')}
+          autoComplete="off"
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onChange={(e) => update({ city: e.target.value, cityGeonameId: null })}
+        />
+        <Suggestions
+          items={visible}
+          onPick={(city) => {
+            update({ city: city.name, cityGeonameId: city.geonameId });
+            setFocused(false);
+          }}
+          render={(city) => (
+            <>
+              <span className="font-medium">{city.name}</span>
+              <span className="text-muted">{[city.region, city.country].filter(Boolean).map((p) => `, ${p}`).join('')}</span>
+            </>
+          )}
+        />
+      </div>
+      {form.cityGeonameId ? (
+        <span className="flex items-center gap-1 text-xs text-brand">
+          <Check size={12} /> {t('log.cityLinked')}
+        </span>
+      ) : (
+        query.length >= 2 && !focused && <span className="text-xs text-muted">{t('log.cityUnlinked')}</span>
+      )}
+    </div>
+  );
+}
+
+// Venue with suggestions from venues already in the app (in the chosen
+// city when there is one), so "Progresja" isn't saved three ways.
+function VenueInput({ form, update }) {
+  const { t, locale } = useI18n();
+  const [focused, setFocused] = useState(false);
+  const [results, setResults] = useState([]);
+  const query = form.venue.trim();
+
+  useEffect(() => {
+    if (!focused || query.length < 2) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      let request = createClient()
+        .from('venues')
+        .select('name, city, city_id, cities(name_en, name_pl)')
+        .ilike('name', `%${exact(query)}%`)
+        .limit(6);
+      if (form.cityGeonameId) request = request.eq('city_id', form.cityGeonameId);
+      const { data } = await request;
+      if (!cancelled) setResults(data ?? []);
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, focused, form.cityGeonameId]);
+
+  // Hide the suggestion that's exactly what's typed already.
+  const visible = focused
+    ? results.filter((v) => !(v.name.toLowerCase() === query.toLowerCase() && (!form.cityGeonameId || v.city_id === form.cityGeonameId)))
+    : [];
+
+  return (
+    <div className="flex flex-col gap-1.5 text-sm">
+      <span className="flex items-center gap-1.5 text-muted">
+        <MapPin size={14} /> {t('log.venue')}
+      </span>
+      <div className="relative">
+        <input
+          className="field"
+          placeholder={t('log.venuePlaceholder')}
+          value={form.venue}
+          aria-label={t('log.venue')}
+          autoComplete="off"
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          // A hand-edited venue is no longer the imported setlist.fm one.
+          onChange={(e) => update({ venue: e.target.value, setlistfmVenueId: null })}
+        />
+        <Suggestions
+          items={visible}
+          onPick={(venue) => {
+            update({
+              venue: venue.name,
+              setlistfmVenueId: null,
+              ...(venue.city_id && !form.cityGeonameId
+                ? { city: cityName(venue, locale), cityGeonameId: venue.city_id }
+                : {}),
+            });
+            setFocused(false);
+          }}
+          render={(venue) => (
+            <>
+              <span className="font-medium">{venue.name}</span>
+              {cityName(venue, locale) && <span className="text-muted">, {cityName(venue, locale)}</span>}
+            </>
+          )}
+        />
+      </div>
+    </div>
   );
 }

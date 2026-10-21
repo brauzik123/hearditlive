@@ -71,7 +71,10 @@ export async function GET(request) {
     eventDate: s.eventDate,
     artistName: s.artist?.name,
     venueName: s.venue?.name,
+    venueId: s.venue?.id ?? null,
     city: s.venue?.city?.name,
+    // setlist.fm city ids are GeoNames ids — the same ones we use.
+    cityGeonameId: s.venue?.city?.id ? Number(s.venue.city.id) : null,
     tourName: s.tour?.name ?? null,
     songCount: (s.sets?.set ?? []).reduce((n, set) => n + (set.song?.length ?? 0), 0),
     sets: (s.sets?.set ?? []).map((set) => ({

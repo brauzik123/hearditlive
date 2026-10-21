@@ -4,19 +4,20 @@ import Link from 'next/link';
 import { Star } from 'lucide-react';
 import { useI18n } from '../i18n/client';
 import { formatRating } from './StarRating';
+import { cityName } from '../utils/placeNames';
 
 // The app's signature object: one logged show as a paper ticket stub.
 // Main part carries the artist and venue; the torn-off stub carries the
 // date (or ticket status for upcoming shows) and the rating.
 //
 // `entry` needs: id, entry_type, event_date, rating, ticket_status,
-// artists(name), venues(name, city). `byline` (e.g. "alice was there") and
+// artists(name), venues(name, city, cities(name_en, name_pl)). `byline` (e.g. "alice was there") and
 // `meta` (e.g. "2 days ago") are optional, pre-rendered strings. `asLink`
 // is off on the entry's own page, where the ticket is the header.
 export default function TicketStub({ entry, byline, meta, size = 'md', asLink = true }) {
-  const { t, stub } = useI18n();
+  const { t, stub, locale } = useI18n();
   const artist = entry.artists?.name ?? t('common.unknownArtist');
-  const venue = [entry.venues?.name, entry.venues?.city].filter(Boolean).join(', ');
+  const venue = [entry.venues?.name, cityName(entry.venues, locale)].filter(Boolean).join(', ');
   const planned = entry.entry_type === 'planned';
   const large = size === 'lg';
   const Wrapper = asLink ? Link : 'div';

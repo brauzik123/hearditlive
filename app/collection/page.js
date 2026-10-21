@@ -7,6 +7,7 @@ import { createClient } from '../../utils/supabase/client';
 import { useI18n } from '../../i18n/client';
 import TicketStub from '../../components/TicketStub';
 import { formatRating } from '../../components/StarRating';
+import { cityName } from '../../utils/placeNames';
 
 const SORTS = ['date_desc', 'date_asc', 'rating_desc', 'artist_asc'];
 const VIEW_KEY = 'collection-view';
@@ -23,7 +24,7 @@ function readSavedView() {
 }
 
 export default function Collection() {
-  const { t, date } = useI18n();
+  const { t, date, locale } = useI18n();
   const [view, setView] = useState('photos');
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState([]);
@@ -59,7 +60,7 @@ export default function Collection() {
         .from('concert_entries')
         .select(
           `id, entry_type, event_date, rating, ticket_status, is_favorite, festival_id,
-           artist_id, artists(name, image_url), venues(name, city), festivals(name),
+           artist_id, artists(name, image_url), venues(name, city, city_id, cities(name_en, name_pl)), festivals(name),
            entry_photos(url, is_cover)`
         )
         .eq('user_id', user.id)
@@ -115,7 +116,8 @@ export default function Collection() {
         (e) =>
           e.artists?.name?.toLowerCase().includes(q) ||
           e.venues?.name?.toLowerCase().includes(q) ||
-          e.venues?.city?.toLowerCase().includes(q)
+          cityName(e.venues, locale).toLowerCase().includes(q) ||
+          (e.venues?.city ?? '').toLowerCase().includes(q)
       );
     }
     if (favoritesOnly) list = list.filter((e) => e.is_favorite);
@@ -127,7 +129,7 @@ export default function Collection() {
       if (sort === 'artist_asc') return (a.artists?.name ?? '').localeCompare(b.artists?.name ?? '');
       return (b.event_date ?? '').localeCompare(a.event_date ?? '');
     });
-  }, [entries, query, sort, favoritesOnly, festivalFilter]);
+  }, [entries, query, sort, favoritesOnly, festivalFilter, locale]);
 
   const festivalNames = useMemo(
     () => [...new Set(entries.map((e) => e.festivals?.name).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
