@@ -1,23 +1,50 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Search, Ticket, Image as ImageIcon, Star, Loader2, Music2 } from 'lucide-react';
+import { Search, List, Image as ImageIcon, Star, Loader2, Music2, ChevronDown, Check } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
 import { useI18n } from '../../i18n/client';
 import TicketStub from '../../components/TicketStub';
 
 const SORTS = ['date_desc', 'date_asc', 'rating_desc', 'artist_asc'];
+const VIEW_KEY = 'collection-view';
+
+// Remembered per device; unavailable storage (private mode) just means
+// the default view.
+function readSavedView() {
+  try {
+    const saved = localStorage.getItem(VIEW_KEY);
+    return saved === 'list' || saved === 'photos' ? saved : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function Collection() {
   const { t, date } = useI18n();
-  const [view, setView] = useState('tickets');
+  const [view, setView] = useState('photos');
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState([]);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState('date_desc');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [festivalsOnly, setFestivalsOnly] = useState(false);
+  const [festivalFilter, setFestivalFilter] = useState([]); // festival names; empty = no filter
+
+  useEffect(() => {
+    const saved = readSavedView();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (saved) setView(saved);
+  }, []);
+
+  const chooseView = (next) => {
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      // Not saved; the choice still applies for this visit.
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -31,8 +58,8 @@ export default function Collection() {
         .from('concert_entries')
         .select(
           `id, entry_type, event_date, rating, ticket_status, is_favorite, festival_id,
-           artist_id, artists(name, image_url), venues(name, city),
-           entry_photos(url, position)`
+           artist_id, artists(name, image_url), venues(name, city), festivals(name),
+           entry_photos(url, is_cover)`
         )
         .eq('user_id', user.id)
         .eq('entry_type', 'attended');
@@ -44,17 +71,16 @@ export default function Collection() {
 
       // One batch request for every cover photo instead of one per entry.
       const rows = data ?? [];
-      const coverPaths = rows
-        .map((e) => (e.entry_photos ?? []).sort((a, b) => a.position - b.position)[0]?.url)
-        .filter(Boolean);
+      const coverOf = (e) => (e.entry_photos ?? []).find((p) => p.is_cover)?.url;
+      const coverPaths = rows.map(coverOf).filter(Boolean);
       const { data: signed } = coverPaths.length
         ? await supabase.storage.from('entry-photos').createSignedUrls(coverPaths, 3600)
         : { data: [] };
       const signedByPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
 
       const withCovers = rows.map((e) => {
-        const firstPhoto = (e.entry_photos ?? []).sort((a, b) => a.position - b.position)[0]?.url;
-        return { ...e, coverUrl: (firstPhoto && signedByPath.get(firstPhoto)) || e.artists?.image_url || null };
+        const cover = coverOf(e);
+        return { ...e, coverUrl: (cover && signedByPath.get(cover)) || e.artists?.image_url || null };
       });
       setEntries(withCovers);
       setLoading(false);
@@ -92,7 +118,7 @@ export default function Collection() {
       );
     }
     if (favoritesOnly) list = list.filter((e) => e.is_favorite);
-    if (festivalsOnly) list = list.filter((e) => e.festival_id);
+    if (festivalFilter.length) list = list.filter((e) => festivalFilter.includes(e.festivals?.name));
 
     return [...list].sort((a, b) => {
       if (sort === 'date_asc') return (a.event_date ?? '').localeCompare(b.event_date ?? '');
@@ -100,7 +126,12 @@ export default function Collection() {
       if (sort === 'artist_asc') return (a.artists?.name ?? '').localeCompare(b.artists?.name ?? '');
       return (b.event_date ?? '').localeCompare(a.event_date ?? '');
     });
-  }, [entries, query, sort, favoritesOnly, festivalsOnly]);
+  }, [entries, query, sort, favoritesOnly, festivalFilter]);
+
+  const festivalNames = useMemo(
+    () => [...new Set(entries.map((e) => e.festivals?.name).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [entries]
+  );
 
   if (loading) {
     return (
@@ -119,14 +150,14 @@ export default function Collection() {
         </div>
         <div role="tablist" aria-label={t('collection.view')} className="flex rounded-full border border-border p-1">
           {[
-            { id: 'tickets', icon: Ticket },
             { id: 'photos', icon: ImageIcon },
+            { id: 'list', icon: List },
           ].map(({ id, icon: Icon }) => (
             <button
               key={id}
               role="tab"
               aria-selected={view === id}
-              onClick={() => setView(id)}
+              onClick={() => chooseView(id)}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition ${
                 view === id ? 'bg-brand font-semibold text-brand-foreground' : 'text-muted hover:text-foreground'
               }`}
@@ -166,9 +197,9 @@ export default function Collection() {
             <Chip active={favoritesOnly} onClick={() => setFavoritesOnly((v) => !v)}>
               {t('collection.favorites')}
             </Chip>
-            <Chip active={festivalsOnly} onClick={() => setFestivalsOnly((v) => !v)}>
-              {t('collection.festivals')}
-            </Chip>
+            {festivalNames.length > 0 && (
+              <FestivalFilter names={festivalNames} selected={festivalFilter} onChange={setFestivalFilter} />
+            )}
           </div>
         </div>
       )}
@@ -182,7 +213,7 @@ export default function Collection() {
         </div>
       ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted">{t('collection.noMatches')}</p>
-      ) : view === 'tickets' ? (
+      ) : view === 'list' ? (
         <div className="flex flex-col gap-3">
           {filtered.map((entry) => (
             <TicketStub key={entry.id} entry={entry} />
@@ -238,5 +269,86 @@ function Chip({ active, onClick, children }) {
     >
       {children}
     </button>
+  );
+}
+
+// "Festival: …" dropdown with a checkbox per festival the user has logged.
+// Nothing ticked means no festival filter at all.
+function FestivalFilter({ names, selected, onChange }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => {
+      if (!ref.current?.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const toggle = (name) => onChange(selected.includes(name) ? selected.filter((n) => n !== name) : [...selected, name]);
+  const summary =
+    selected.length === 0
+      ? t('collection.festivalAll')
+      : selected.length === 1
+        ? selected[0]
+        : t('collection.festivalCount', { count: selected.length });
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className={`flex max-w-56 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition ${
+          selected.length ? 'border-brand bg-brand font-semibold text-brand-foreground' : 'border-border text-muted hover:text-foreground'
+        }`}
+      >
+        <span className="truncate">
+          {t('collection.festivalFilter')}: {summary}
+        </span>
+        <ChevronDown size={14} className="shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute left-0 z-30 mt-2 w-64 rounded-xl border border-border bg-surface p-2 shadow-[0_12px_32px_-12px_rgba(0,0,0,0.6)]">
+          <div className="flex justify-between gap-2 border-b border-border px-1 pb-2">
+            <button type="button" onClick={() => onChange(names)} className="text-sm font-medium text-brand">
+              {t('collection.festivalSelectAll')}
+            </button>
+            <button type="button" onClick={() => onChange([])} className="text-sm text-muted hover:text-foreground">
+              {t('collection.festivalClear')}
+            </button>
+          </div>
+          <ul className="max-h-64 overflow-y-auto pt-1">
+            {names.map((name) => {
+              const checked = selected.includes(name);
+              return (
+                <li key={name}>
+                  <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-surface-light">
+                    <input type="checkbox" checked={checked} onChange={() => toggle(name)} className="sr-only" />
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                        checked ? 'border-brand bg-brand text-brand-foreground' : 'border-border'
+                      }`}
+                    >
+                      {checked && <Check size={12} strokeWidth={3} />}
+                    </span>
+                    <span className="truncate">{name}</span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }

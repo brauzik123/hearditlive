@@ -5,26 +5,7 @@ import { Camera, Loader2, Trash2 } from 'lucide-react';
 import { createClient } from '../utils/supabase/client';
 import { useI18n } from '../i18n/client';
 import Avatar from './Avatar';
-
-const SIZE = 512;
-
-// Crops the picked image to a centred square and re-encodes it as a
-// 512px JPEG in the browser: uploads stay small (well under the bucket's
-// 5 MB cap) and camera metadata like GPS location is dropped.
-async function toSquareJpeg(file) {
-  const bitmap = await createImageBitmap(file);
-  const side = Math.min(bitmap.width, bitmap.height);
-  const canvas = document.createElement('canvas');
-  canvas.width = SIZE;
-  canvas.height = SIZE;
-  canvas
-    .getContext('2d')
-    .drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, SIZE, SIZE);
-  bitmap.close();
-  return new Promise((resolve, reject) =>
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('encode failed'))), 'image/jpeg', 0.86)
-  );
-}
+import { shrinkImage } from '../utils/image';
 
 export default function AvatarEditor({ username, avatarUrl, onChange }) {
   const { t } = useI18n();
@@ -46,7 +27,7 @@ export default function AvatarEditor({ username, avatarUrl, onChange }) {
     try {
       let blob;
       try {
-        blob = await toSquareJpeg(file);
+        blob = await shrinkImage(file, { maxSide: 512, square: true, quality: 0.86 });
       } catch {
         // Typically HEIC photos in browsers that can't decode them.
         setError(t('settings.photoUnsupported'));
