@@ -84,7 +84,14 @@ export default async function EntryDetail({ params }) {
       <section className="flex flex-col gap-3">
         <TicketStub entry={entry} size="lg" asLink={false} />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
-          {entry.festivals?.name && <span>{t('entry.atFestival', { name: entry.festivals.name })}</span>}
+          {entry.festivals?.name && (
+            <Link
+              href={`/festival/${entry.festival_id}${isOwner ? '' : `?u=${ownerName}`}`}
+              className="text-brand underline-offset-4 hover:underline"
+            >
+              {t('entry.atFestival', { name: entry.festivals.name })}
+            </Link>
+          )}
           {entry.tour_name && <span>{entry.tour_name}</span>}
           {entry.is_favorite && (
             <span className="flex items-center gap-1 text-brand">

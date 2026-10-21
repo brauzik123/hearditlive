@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 
 const PUBLIC_PATHS = ['/login'];
 const PUBLIC_PREFIXES = ['/auth/'];
+// Readable by everyone, signed in or not (no redirect either way).
+const OPEN_PATHS = ['/privacy'];
 
 export async function updateSession(request) {
   let response = NextResponse.next({ request });
@@ -31,6 +33,7 @@ export async function updateSession(request) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
+  if (OPEN_PATHS.includes(path)) return response;
   const isPublicPath = PUBLIC_PATHS.includes(path) || PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix));
 
   if (!user && !isPublicPath) {

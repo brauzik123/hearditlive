@@ -173,7 +173,9 @@ function LogEntry() {
         .map((p) => ({ id: p.id, url: p.url, caption: p.caption ?? '', blob: null, previewUrl: null, isCover: p.is_cover }));
 
       setForm({
-        entryType: entry.entry_type,
+        // ?went=1 comes from Home's "Were you there?": the planned show
+        // becomes an attended one, ready for a rating and setlist.
+        entryType: new URLSearchParams(window.location.search).get('went') === '1' ? 'attended' : entry.entry_type,
         artist: entry.artists?.name ?? '',
         venue: entry.venues?.name ?? '',
         city: entry.venues ? cityName(entry.venues, locale) : '',

@@ -248,7 +248,7 @@ export default function Collection() {
                   <span>{date(entry.event_date)}</span>
                   {entry.rating != null && (
                     <span className="flex items-center gap-0.5 font-semibold text-brand">
-                      <Star size={11} className="fill-brand" /> {formatRating(entry.rating)}
+                      <Star size={11} className="fill-brand" /> {formatRating(entry.rating, locale)}
                     </span>
                   )}
                 </p>

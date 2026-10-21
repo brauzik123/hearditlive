@@ -47,7 +47,7 @@ export default async function Stats() {
 
   const { data: attended } = await supabase
     .from('concert_entries')
-    .select('id, festival_id, event_date, venue_id, artists(name), venues(name, city, city_id, cities(name_en, name_pl))')
+    .select('id, festival_id, event_date, venue_id, artists(name), festivals(name), venues(name, city, city_id, cities(name_en, name_pl))')
     .eq('user_id', user.id)
     .eq('entry_type', 'attended');
 
@@ -78,6 +78,19 @@ export default async function Stats() {
     5
   );
   const topCities = topByOutings(entries, cityKey, (e) => cityName(e.venues, locale), 5);
+
+  // Festivals: editions (distinct years) and sets seen at each.
+  const festivalMap = new Map();
+  for (const e of entries) {
+    if (!e.festival_id) continue;
+    if (!festivalMap.has(e.festival_id)) {
+      festivalMap.set(e.festival_id, { id: e.festival_id, name: e.festivals?.name ?? '', years: new Set(), sets: 0 });
+    }
+    const f = festivalMap.get(e.festival_id);
+    f.sets += 1;
+    if (e.event_date) f.years.add(e.event_date.slice(0, 4));
+  }
+  const festivals = [...festivalMap.values()].sort((a, b) => b.years.size - a.years.size || b.sets - a.sets);
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-12 px-4 py-6 md:py-10">
@@ -111,6 +124,24 @@ export default async function Stats() {
           ))}
         </dl>
       </section>
+
+      {festivals.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="marquee text-3xl">{t('stats.festivals')}</h2>
+          <ul className="flex flex-col">
+            {festivals.map((f) => (
+              <li key={f.id} className="border-b border-border last:border-b-0">
+                <Link href={`/festival/${f.id}`} className="flex items-baseline justify-between gap-3 py-2.5 hover:text-brand">
+                  <span className="truncate">{f.name}</span>
+                  <span className="shrink-0 text-sm text-muted">
+                    {t('festival.editions', { count: Math.max(f.years.size, 1) })}, {t('festival.sets', { count: f.sets })}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <RankedList title={t('stats.topSongs')} items={topSongs} countLabel={(n) => t('stats.timesHeard', { count: n })} />
       <div className="grid gap-12 md:grid-cols-2">

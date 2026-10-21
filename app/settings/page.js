@@ -215,6 +215,9 @@ export default function Settings() {
           </button>
         </div>
         <DeleteAccountSection />
+        <Link href="/privacy" className="self-start text-sm text-muted underline-offset-4 hover:text-foreground hover:underline">
+          {t('settings.privacyPolicy')}
+        </Link>
       </Section>
 
       <div className="fixed bottom-16 left-0 z-40 w-full border-t border-border bg-background/95 p-3 backdrop-blur md:bottom-0">

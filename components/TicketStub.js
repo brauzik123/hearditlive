@@ -50,8 +50,8 @@ export default function TicketStub({ entry, byline, meta, size = 'md', asLink = 
           </span>
         ) : (
           entry.rating != null && (
-            <span className="mt-1 flex items-center gap-0.5 text-sm font-bold" aria-label={t('ticket.rating', { stars: formatRating(entry.rating) })}>
-              <Star size={12} className="fill-paper-ink" /> {formatRating(entry.rating)}
+            <span className="mt-1 flex items-center gap-0.5 text-sm font-bold" aria-label={t('ticket.rating', { stars: formatRating(entry.rating, locale) })}>
+              <Star size={12} className="fill-paper-ink" /> {formatRating(entry.rating, locale)}
             </span>
           )
         )}

@@ -5,9 +5,11 @@ import { useI18n } from '../i18n/client';
 
 const COUNT = 10;
 
-// Ratings are 0.5–10 stars in half steps. Shown as "7.5", "8".
-export const formatRating = (rating) =>
-  Number(rating).toLocaleString(undefined, { maximumFractionDigits: 1 });
+// Ratings are 0.5–10 stars in half steps: "7.5" in English, "7,5" in
+// Polish. Uses the app's language, not the browser's, so server and
+// client render the same text.
+export const formatRating = (rating, locale) =>
+  Number(rating).toLocaleString(locale === 'pl' ? 'pl-PL' : 'en-GB', { maximumFractionDigits: 1 });
 
 function StarShape({ fill, size }) {
   return (
@@ -24,7 +26,7 @@ function StarShape({ fill, size }) {
 // separate tap targets. Sized to fit a phone screen; arrow keys step by
 // half a star.
 export default function StarRating({ value, onChange }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   const onKeyDown = (e) => {
     if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
@@ -45,7 +47,7 @@ export default function StarRating({ value, onChange }) {
         aria-valuemin={0.5}
         aria-valuemax={COUNT}
         aria-valuenow={value}
-        aria-valuetext={t('log.ratingValue', { stars: formatRating(value) })}
+        aria-valuetext={t('log.ratingValue', { stars: formatRating(value, locale) })}
         onKeyDown={onKeyDown}
         className="flex w-full max-w-md justify-between rounded-lg outline-offset-4"
       >
@@ -72,7 +74,7 @@ export default function StarRating({ value, onChange }) {
         ))}
       </div>
       <p className="text-sm text-muted">
-        <span className="marquee text-3xl text-brand">{formatRating(value)}</span> / {COUNT}
+        <span className="marquee text-3xl text-brand">{formatRating(value, locale)}</span> / {COUNT}
       </p>
     </div>
   );

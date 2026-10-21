@@ -202,6 +202,9 @@ export default function Login() {
             {isLogin ? t('login.registerLink') : t('login.loginLink')}
           </button>
         </p>
+        <a href="/privacy" className="text-xs text-muted underline-offset-4 hover:text-foreground hover:underline">
+          {t('settings.privacyPolicy')}
+        </a>
       </div>
     </main>
   );

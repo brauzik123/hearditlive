@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react';
 import { createClient } from '../utils/supabase/server';
 import { getI18n } from '../i18n/server';
 import TicketStub from '../components/TicketStub';
+import PastPlans from '../components/PastPlans';
 import { countOutings } from '../utils/outings';
 
 const ENTRY_FIELDS = 'id, entry_type, event_date, rating, ticket_status, created_at, artists(name), venues(name, city, city_id, cities(name_en, name_pl))';
@@ -16,7 +17,7 @@ export default async function Home() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const [{ data: attended }, { data: lastShowRows }, { data: upcoming }, { data: followRows }] = await Promise.all([
+  const [{ data: attended }, { data: lastShowRows }, { data: upcoming }, { data: followRows }, { data: pastPlans }] = await Promise.all([
     supabase
       .from('concert_entries')
       .select('id, artist_id, festival_id, event_date, venues(city, city_id)')
@@ -38,6 +39,15 @@ export default async function Home() {
       .order('event_date', { ascending: true, nullsFirst: false })
       .limit(5),
     supabase.from('follows').select('followee_id').eq('follower_id', user.id).eq('status', 'accepted'),
+    // Planned shows whose date has passed: ask whether you went.
+    supabase
+      .from('concert_entries')
+      .select(ENTRY_FIELDS)
+      .eq('user_id', user.id)
+      .eq('entry_type', 'planned')
+      .lt('event_date', today)
+      .order('event_date', { ascending: false })
+      .limit(3),
   ]);
 
   // Activity feed: latest entries from people you follow. Visibility is
@@ -71,6 +81,8 @@ export default async function Home() {
 
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-10 px-4 py-6 md:py-10">
+      {pastPlans?.length > 0 && <PastPlans entries={pastPlans} />}
+
       {isNewHere ? (
         <section className="flex flex-col items-start gap-4 pt-6">
           <h1 className="marquee text-6xl md:text-7xl">{t('home.emptyTitle')}</h1>
