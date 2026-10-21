@@ -10,6 +10,7 @@ import { createClient } from '../../utils/supabase/client';
 import { useI18n } from '../../i18n/client';
 import { newId } from '../../utils/id';
 import { shrinkImage } from '../../utils/image';
+import StarRating from '../../components/StarRating';
 
 const STEPS = ['basics', 'details', 'media', 'people'];
 const MAX_PHOTOS = 8;
@@ -629,16 +630,12 @@ function DetailsSection({ form, update }) {
   return (
     <Section title={t('log.steps.details')}>
       {form.entryType === 'attended' && (
-        <Field label={t('log.rating', { rating: form.rating })} icon={Star}>
-          <input
-            type="range"
-            min="1"
-            max="10"
-            value={form.rating}
-            onChange={(e) => update({ rating: Number(e.target.value) })}
-            className="accent-brand"
-          />
-        </Field>
+        <div className="flex flex-col gap-2">
+          <span className="flex items-center gap-1.5 text-sm text-muted">
+            <Star size={14} /> {t('log.ratingLabel')}
+          </span>
+          <StarRating value={form.rating} onChange={(rating) => update({ rating })} />
+        </div>
       )}
 
       <Field label={form.entryType === 'attended' ? t('log.memories') : t('log.notes')}>

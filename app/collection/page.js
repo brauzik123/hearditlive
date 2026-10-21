@@ -6,6 +6,7 @@ import { Search, List, Image as ImageIcon, Star, Loader2, Music2, ChevronDown, C
 import { createClient } from '../../utils/supabase/client';
 import { useI18n } from '../../i18n/client';
 import TicketStub from '../../components/TicketStub';
+import { formatRating } from '../../components/StarRating';
 
 const SORTS = ['date_desc', 'date_asc', 'rating_desc', 'artist_asc'];
 const VIEW_KEY = 'collection-view';
@@ -245,7 +246,7 @@ export default function Collection() {
                   <span>{date(entry.event_date)}</span>
                   {entry.rating != null && (
                     <span className="flex items-center gap-0.5 font-semibold text-brand">
-                      <Star size={11} className="fill-brand" /> {entry.rating}
+                      <Star size={11} className="fill-brand" /> {formatRating(entry.rating)}
                     </span>
                   )}
                 </p>

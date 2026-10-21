@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Star } from 'lucide-react';
 import { useI18n } from '../i18n/client';
+import { formatRating } from './StarRating';
 
 // The app's signature object: one logged show as a paper ticket stub.
 // Main part carries the artist and venue; the torn-off stub carries the
@@ -48,8 +49,8 @@ export default function TicketStub({ entry, byline, meta, size = 'md', asLink = 
           </span>
         ) : (
           entry.rating != null && (
-            <span className="mt-1 flex items-center gap-0.5 text-sm font-bold" aria-label={t('ticket.rating', { rating: entry.rating })}>
-              <Star size={12} className="fill-paper-ink" /> {entry.rating}
+            <span className="mt-1 flex items-center gap-0.5 text-sm font-bold" aria-label={t('ticket.rating', { stars: formatRating(entry.rating) })}>
+              <Star size={12} className="fill-paper-ink" /> {formatRating(entry.rating)}
             </span>
           )
         )}

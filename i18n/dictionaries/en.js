@@ -26,7 +26,7 @@ const en = {
   },
   ticket: {
     dateTba: 'TBA',
-    rating: 'Rated {rating} out of 10',
+    rating: 'Rated {stars} out of 10 stars',
   },
   ticketStatus: {
     bought: 'Got a ticket',
@@ -128,7 +128,8 @@ const en = {
     yourFestivals: 'Your festivals',
     festivalOther: 'Or type another festival',
     festivalPlaceholder: 'e.g. Open’er 2026',
-    rating: 'Rating: {rating}/10',
+    ratingLabel: 'Your rating',
+    ratingValue: '{stars} out of 10 stars',
     memories: 'What you remember',
     memoriesPlaceholder: 'What made this show special?',
     notes: 'Notes',

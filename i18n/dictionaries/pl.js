@@ -33,7 +33,7 @@ const pl = {
   },
   ticket: {
     dateTba: 'TBA',
-    rating: 'Ocena {rating} na 10',
+    rating: 'Ocena: {stars} na 10 gwiazdek',
   },
   ticketStatus: {
     bought: 'Mam bilet',
@@ -135,7 +135,8 @@ const pl = {
     yourFestivals: 'Twoje festiwale',
     festivalOther: 'Albo wpisz inny festiwal',
     festivalPlaceholder: 'np. Open’er 2026',
-    rating: 'Ocena: {rating}/10',
+    ratingLabel: 'Twoja ocena',
+    ratingValue: '{stars} na 10 gwiazdek',
     memories: 'Co zapamiętasz',
     memoriesPlaceholder: 'Co sprawiło, że ten koncert był wyjątkowy?',
     notes: 'Notatki',
