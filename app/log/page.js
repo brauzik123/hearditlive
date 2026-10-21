@@ -752,7 +752,7 @@ function MediaSetlistSection({ form, update }) {
           <PhotoPicker
             disabled={room <= 0 || processing}
             onPick={(files) => addPhotos(files, true)}
-            className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border text-muted transition hover:border-brand hover:text-foreground"
+            className="flex h-28 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border text-muted transition hover:border-brand hover:text-foreground"
           >
             <ImagePlus size={26} />
             <span className="text-sm">{t('log.coverAdd')}</span>
