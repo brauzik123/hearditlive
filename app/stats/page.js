@@ -134,7 +134,8 @@ export default async function Stats() {
                 <Link href={`/festival/${f.id}`} className="flex items-baseline justify-between gap-3 py-2.5 hover:text-brand">
                   <span className="truncate">{f.name}</span>
                   <span className="shrink-0 text-sm text-muted">
-                    {t('festival.editions', { count: Math.max(f.years.size, 1) })}, {t('festival.sets', { count: f.sets })}
+                    {f.years.size > 1 && <>{t('festival.editions', { count: f.years.size })}, </>}
+                    {t('festival.sets', { count: f.sets })}
                   </span>
                 </Link>
               </li>

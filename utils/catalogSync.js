@@ -10,6 +10,7 @@ import {
   SpotifyRateLimitError,
 } from './spotify';
 import { normalizeSongName } from './normalize';
+import { findArtistMbid, getBandMemberships } from './musicbrainz';
 
 export { normalizeSongName };
 
@@ -126,7 +127,16 @@ export async function ensureArtistSynced(supabase, artist) {
 
 async function syncCatalog(supabase, artist) {
   const resolved = await ensureArtistImage(supabase, artist);
-  const releases = resolved.spotify_id ? pickEditions(await getArtistReleases(resolved.spotify_id)) : [];
+  const all = resolved.spotify_id ? pickEditions(await getArtistReleases(resolved.spotify_id)) : [];
+
+  // Spotify lists every release the artist is credited on as a main
+  // artist, including other people's singles ("Congratulations (Remix)" by
+  // Post Malone shows up under Quavo). Only releases where they're the
+  // first credit are their own; the rest are guest appearances. Own
+  // releases go first so a song lands on the artist's own release when it
+  // appears on both.
+  const isOwn = (release) => release.artists?.[0]?.id === resolved.spotify_id;
+  const releases = [...all.filter(isOwn), ...all.filter((r) => !isOwn(r))];
 
   // One-track singles need no extra request: the release is the song.
   const tracklists = await mapLimit(releases, 5, (release) =>
@@ -137,7 +147,8 @@ async function syncCatalog(supabase, artist) {
   const songs = [];
   const seen = new Set();
   releases.forEach((release, i) => {
-    const tile = isTile(release);
+    const own = isOwn(release);
+    const tile = own && isTile(release);
     if (tile) {
       albums.push({
         spotify_album_id: release.id,
@@ -148,6 +159,9 @@ async function syncCatalog(supabase, artist) {
       });
     }
     tracklists[i].forEach((track, position) => {
+      // On someone else's multi-track release, only the songs this artist
+      // is actually on count (a one-track single carries no artist list).
+      if (!own && track.artists && !track.artists.some((a) => a.id === resolved.spotify_id)) return;
       const key = normalizeSongName(track.name);
       if (!key || seen.has(key)) return;
       seen.add(key);
@@ -156,7 +170,7 @@ async function syncCatalog(supabase, artist) {
         spotify_track_id: track.id,
         spotify_album_id: tile ? release.id : null,
         track_number: position + 1,
-        is_feature: false,
+        is_feature: !own,
       });
     });
   });
@@ -243,4 +257,54 @@ export async function resolveHeardSongsForArtist(supabase, artist, heardNames) {
     .from('songs')
     .upsert(deduped, { onConflict: 'artist_id,name', ignoreDuplicates: true });
   if (error) console.error('heard songs upsert failed:', error.message);
+}
+
+const GROUPS_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+// Looks up which bands the artist is in (MusicBrainz), makes sure each band
+// exists as an artist with a synced catalog, and records the membership.
+// Heard songs that turn out to be the band's then show under the band on
+// the artist's Songs page. Checked once per 30 days per artist; failures
+// just mean no band tiles until the next check.
+export async function ensureArtistGroups(supabase, artist) {
+  const fresh =
+    artist.groups_checked_at && Date.now() - new Date(artist.groups_checked_at).getTime() < GROUPS_MAX_AGE_MS;
+  if (fresh) return;
+
+  try {
+    let mbid = artist.setlistfm_mbid;
+    if (!mbid) {
+      mbid = await findArtistMbid(artist.name);
+      if (mbid) await supabase.from('artists').update({ setlistfm_mbid: mbid }).eq('id', artist.id);
+    }
+    const bands = mbid ? await getBandMemberships(mbid) : [];
+
+    for (const band of bands) {
+      let { data: row } = await supabase.from('artists').select('*').eq('setlistfm_mbid', band.mbid).maybeSingle();
+      if (!row) {
+        const { data: byName } = await supabase
+          .from('artists')
+          .select('*')
+          .ilike('name', band.name.replace(/[\\%_]/g, (c) => `\\${c}`))
+          .limit(1)
+          .maybeSingle();
+        row = byName;
+      }
+      if (!row) {
+        const { data: created, error } = await supabase
+          .from('artists')
+          .insert({ name: band.name, setlistfm_mbid: band.mbid })
+          .select('*')
+          .single();
+        if (error) continue;
+        row = created;
+      }
+      if (row.id === artist.id) continue;
+      await supabase.from('artist_groups').upsert({ artist_id: artist.id, group_id: row.id });
+      await ensureArtistSynced(supabase, row);
+    }
+  } catch (err) {
+    console.error('band lookup failed:', err.message);
+  }
+  await supabase.from('artists').update({ groups_checked_at: new Date().toISOString() }).eq('id', artist.id);
 }

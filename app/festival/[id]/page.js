@@ -77,7 +77,9 @@ export default async function FestivalPage({ params, searchParams }) {
         </div>
         <dl className="flex gap-8">
           {[
-            [attendedYears, t('festival.editionsLabel', { count: attendedYears })],
+            // Editions only mean something when one festival spans several
+            // years; most people put the edition in the name ("Clout 5").
+            ...(attendedYears > 1 ? [[attendedYears, t('festival.editionsLabel', { count: attendedYears })]] : []),
             [rows.length, t('festival.setsLabel', { count: rows.length })],
             [artistCount, t('stats.artistsLabel', { count: artistCount })],
           ].map(([value, label]) => (

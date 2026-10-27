@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '../../../../utils/supabase/server';
 import { createAdminClient } from '../../../../utils/supabase/admin';
-import { ensureArtistSynced, isInBackoff, resolveHeardSongsForArtist } from '../../../../utils/catalogSync';
+import { ensureArtistGroups, ensureArtistSynced, isInBackoff, resolveHeardSongsForArtist } from '../../../../utils/catalogSync';
 
 // Rebuilds one artist's catalog from Spotify (if stale) and classifies the
 // signed-in user's heard songs that aren't on the artist's own releases.
@@ -39,6 +39,9 @@ export async function POST(request) {
 
   try {
     const synced = await ensureArtistSynced(admin, artist);
+    // Bands the artist is in (Quavo → Migos), so their songs heard at the
+    // artist's shows can be grouped under the band.
+    if (synced.catalog_synced_at && !isInBackoff(synced)) await ensureArtistGroups(admin, synced);
     // Classify heard songs only against a real catalog, and not while the
     // artist is backing off from a failure (another sync holding the claim,
     // or Spotify rate-limiting us) — those cases retry on a later visit.

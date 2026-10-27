@@ -125,7 +125,9 @@ export async function getArtistSongs(supabase, userId, artistId) {
   const distinctHeardNames = Array.from(new Set(heardNamesRaw));
   const knownNormalized = new Set((catalogSongs ?? []).map((s) => normalizeSongName(s.name)));
   const needsSync =
-    !artist.catalog_synced_at || distinctHeardNames.some((name) => !knownNormalized.has(normalizeSongName(name)));
+    !artist.catalog_synced_at ||
+    !artist.groups_checked_at ||
+    distinctHeardNames.some((name) => !knownNormalized.has(normalizeSongName(name)));
 
   const songsByAlbum = new Map();
   const singles = [];
@@ -161,6 +163,34 @@ export async function getArtistSongs(supabase, userId, artistId) {
     }
   });
 
+  // Bands the artist is in (Quavo → Migos): heard songs that aren't the
+  // artist's own but are in a band's catalog go under that band.
+  const { data: groupLinks } = await supabase.from('artist_groups').select('group_id').eq('artist_id', artistId);
+  const groupIds = (groupLinks ?? []).map((g) => g.group_id);
+  const groups = [];
+  if (groupIds.length) {
+    const unmatched = [...heardCounts.keys()].filter((key) => !matchedNormalized.has(key));
+    const [{ data: groupArtists }, { data: groupSongs }] = await Promise.all([
+      supabase.from('artists').select('id, name, image_url').in('id', groupIds),
+      unmatched.length
+        ? supabase.from('songs').select('artist_id, name').in('artist_id', groupIds).not('spotify_track_id', 'is', null)
+        : Promise.resolve({ data: [] }),
+    ]);
+    const byGroup = new Map((groupArtists ?? []).map((g) => [g.id, { id: g.id, name: g.name, imageUrl: g.image_url, songs: [] }]));
+    const unmatchedSet = new Set(unmatched);
+    for (const song of groupSongs ?? []) {
+      const key = normalizeSongName(song.name);
+      if (!unmatchedSet.has(key)) continue;
+      unmatchedSet.delete(key); // first band to claim a song keeps it
+      matchedNormalized.add(key);
+      const heard = heardCounts.get(key);
+      byGroup.get(song.artist_id)?.songs.push({ name: heard.rawName, heard: true, count: heard.count });
+    }
+    for (const group of byGroup.values()) {
+      if (group.songs.length) groups.push({ ...group, songs: group.songs.sort((a, b) => b.count - a.count) });
+    }
+  }
+
   const others = Array.from(heardCounts.entries())
     .filter(([key]) => !matchedNormalized.has(key))
     .map(([, v]) => ({ name: v.rawName, count: v.count, excluded: v.excluded }));
@@ -178,6 +208,7 @@ export async function getArtistSongs(supabase, userId, artistId) {
     albums,
     singles: singles.sort((a, b) => b.count - a.count),
     features: features.sort((a, b) => b.count - a.count),
+    bands: groups,
     others: others.sort((a, b) => b.count - a.count),
     needsSync,
     // No discography yet (first sync pending, or Spotify unavailable):

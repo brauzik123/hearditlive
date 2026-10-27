@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Music2, Check, X, Disc3, Sparkles, HelpCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Music2, Check, X, Disc3, Sparkles, HelpCircle, Loader2, Users } from 'lucide-react';
 import { createClient } from '../utils/supabase/client';
 import { useI18n } from '../i18n/client';
 
@@ -99,6 +99,7 @@ export default function ArtistSongsView({
   albums: allAlbums,
   singles,
   features,
+  bands = [],
   others,
   needsSync,
   catalogMissing = false,
@@ -115,6 +116,7 @@ export default function ArtistSongsView({
     ...albums.map((a) => ({ type: 'album', id: a.id })),
     ...(singles.length ? [{ type: 'singles', id: 'singles' }] : []),
     ...(features.length ? [{ type: 'features', id: 'features' }] : []),
+    ...bands.map((g) => ({ type: 'group', id: `group:${g.id}` })),
     ...(others.length ? [{ type: 'others', id: 'others' }] : []),
   ];
   const [selectedId, setSelectedId] = useState(null);
@@ -150,6 +152,10 @@ export default function ArtistSongsView({
     if (selected.type === 'album') return albums.find((a) => a.id === selected.id);
     if (selected.type === 'singles') return { name: t('songs.singles'), songs: singles };
     if (selected.type === 'features') return { name: t('songs.features'), songs: features };
+    if (selected.type === 'group') {
+      const group = bands.find((g) => `group:${g.id}` === selected.id);
+      return { name: group.name, songs: group.songs, hint: t('songs.groupHint', { band: group.name, name: artist.name }) };
+    }
     return { name: t('songs.others'), songs: others, hint: readOnly ? null : t('songs.othersHint') };
   })();
 
@@ -206,6 +212,17 @@ export default function ArtistSongsView({
           {features.length > 0 && (
             <Tile icon={Sparkles} title={t('songs.features')} heard={features.length} active={selected?.id === 'features'} onClick={() => setSelectedId('features')} />
           )}
+          {bands.map((group) => (
+            <Tile
+              key={group.id}
+              imageUrl={group.imageUrl}
+              icon={Users}
+              title={group.name}
+              heard={group.songs.length}
+              active={selected?.id === `group:${group.id}`}
+              onClick={() => setSelectedId(`group:${group.id}`)}
+            />
+          ))}
           {others.length > 0 && (
             <Tile icon={HelpCircle} title={t('songs.others')} heard={others.length} active={selected?.id === 'others'} onClick={() => setSelectedId('others')} />
           )}
