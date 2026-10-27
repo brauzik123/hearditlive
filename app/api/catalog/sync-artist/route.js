@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '../../../../utils/supabase/server';
 import { createAdminClient } from '../../../../utils/supabase/admin';
+import { fetchAllIn } from '../../../../utils/fetchAll';
 import { ensureArtistGroups, ensureArtistSynced, isInBackoff, resolveHeardSongsForArtist } from '../../../../utils/catalogSync';
 
 // Rebuilds one artist's catalog from Spotify (if stale) and classifies the
@@ -47,8 +48,8 @@ export async function POST(request) {
     // or Spotify rate-limiting us) — those cases retry on a later visit.
     const entryIds = (entries ?? []).map((e) => e.id);
     if (entryIds.length && synced.catalog_synced_at && !isInBackoff(synced)) {
-      const { data: setlistRows } = await supabase.from('entry_setlist').select('song_name').in('entry_id', entryIds);
-      const heardNames = Array.from(new Set((setlistRows ?? []).map((r) => r.song_name)));
+      const setlistRows = await fetchAllIn(() => supabase.from('entry_setlist').select('song_name'), 'entry_id', entryIds);
+      const heardNames = Array.from(new Set(setlistRows.map((r) => r.song_name)));
       if (heardNames.length) await resolveHeardSongsForArtist(admin, synced, heardNames);
     }
     return NextResponse.json({ ok: true });

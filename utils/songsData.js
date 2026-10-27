@@ -1,4 +1,5 @@
 import { normalizeSongName } from './normalize';
+import { fetchAll, fetchAllIn } from './fetchAll';
 
 // Data for the Songs section, for any user — your own (/songs) or someone
 // else's (/u/[username]/songs). Queries run with the *viewer's* session, so
@@ -23,9 +24,11 @@ export async function getSongsOverview(supabase, userId) {
   });
 
   const entryIds = rows.map((e) => e.id);
-  const { data: setlistRows } = entryIds.length
-    ? await supabase.from('entry_setlist').select('entry_id, song_name').in('entry_id', entryIds)
-    : { data: [] };
+  const setlistRows = await fetchAllIn(
+    () => supabase.from('entry_setlist').select('entry_id, song_name'),
+    'entry_id',
+    entryIds
+  );
 
   const { data: exclusionRows } = await supabase
     .from('song_count_exclusions')
@@ -43,14 +46,11 @@ export async function getSongsOverview(supabase, userId) {
 
   const artists = Array.from(artistsById.values());
   const artistIds = artists.map((a) => a.id);
-  const { data: catalogSongs } = artistIds.length
-    ? await supabase
-        .from('songs')
-        .select('artist_id, name')
-        .in('artist_id', artistIds)
-        .eq('is_feature', false)
-        .not('spotify_track_id', 'is', null)
-    : { data: [] };
+  const catalogSongs = await fetchAllIn(
+    () => supabase.from('songs').select('artist_id, name').eq('is_feature', false).not('spotify_track_id', 'is', null),
+    'artist_id',
+    artistIds
+  );
 
   const catalogByArtist = new Map();
   (catalogSongs ?? []).forEach((s) => {
@@ -84,7 +84,7 @@ export async function getSongsOverview(supabase, userId) {
 export async function getArtistSongs(supabase, userId, artistId) {
   // Everything except the setlist depends only on the ids we already have,
   // so fetch it all at once — this renders purely from cache.
-  const [{ data: artist }, { data: attendedEntries }, { data: exclusionRows }, { data: catalogSongs }, { data: albumRows }] =
+  const [{ data: artist }, { data: attendedEntries }, { data: exclusionRows }, catalogSongs, { data: albumRows }] =
     await Promise.all([
       supabase.from('artists').select('*').eq('id', artistId).maybeSingle(),
       supabase
@@ -94,10 +94,12 @@ export async function getArtistSongs(supabase, userId, artistId) {
         .eq('artist_id', artistId)
         .eq('entry_type', 'attended'),
       supabase.from('song_count_exclusions').select('song_name').eq('user_id', userId).eq('artist_id', artistId),
-      supabase
-        .from('songs')
-        .select('id, name, album_id, spotify_track_id, is_feature, track_number')
-        .eq('artist_id', artistId),
+      fetchAll(() =>
+        supabase
+          .from('songs')
+          .select('id, name, album_id, spotify_track_id, is_feature, track_number')
+          .eq('artist_id', artistId)
+      ),
       supabase
         .from('albums')
         .select('id, name, image_url, release_date, total_tracks')
@@ -108,7 +110,7 @@ export async function getArtistSongs(supabase, userId, artistId) {
   if (!artist || !attendedEntries?.length) return null;
 
   const entryIds = attendedEntries.map((e) => e.id);
-  const { data: setlistRows } = await supabase.from('entry_setlist').select('song_name').in('entry_id', entryIds);
+  const setlistRows = await fetchAllIn(() => supabase.from('entry_setlist').select('song_name'), 'entry_id', entryIds);
 
   const excludedNames = new Set((exclusionRows ?? []).map((r) => r.song_name));
 
@@ -170,11 +172,11 @@ export async function getArtistSongs(supabase, userId, artistId) {
   const groups = [];
   if (groupIds.length) {
     const unmatched = [...heardCounts.keys()].filter((key) => !matchedNormalized.has(key));
-    const [{ data: groupArtists }, { data: groupSongs }] = await Promise.all([
+    const [{ data: groupArtists }, groupSongs] = await Promise.all([
       supabase.from('artists').select('id, name, image_url').in('id', groupIds),
       unmatched.length
-        ? supabase.from('songs').select('artist_id, name').in('artist_id', groupIds).not('spotify_track_id', 'is', null)
-        : Promise.resolve({ data: [] }),
+        ? fetchAllIn(() => supabase.from('songs').select('artist_id, name').not('spotify_track_id', 'is', null), 'artist_id', groupIds)
+        : [],
     ]);
     const byGroup = new Map((groupArtists ?? []).map((g) => [g.id, { id: g.id, name: g.name, imageUrl: g.image_url, songs: [] }]));
     const unmatchedSet = new Set(unmatched);

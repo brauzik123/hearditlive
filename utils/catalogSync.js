@@ -10,6 +10,7 @@ import {
   SpotifyRateLimitError,
 } from './spotify';
 import { normalizeSongName } from './normalize';
+import { fetchAll } from './fetchAll';
 import { findArtistMbid, getBandMemberships } from './musicbrainz';
 
 export { normalizeSongName };
@@ -189,8 +190,8 @@ async function syncCatalog(supabase, artist) {
 // compilation track — goes to Singles), a guest feature on someone else's
 // release, or (no match) "Others".
 export async function resolveHeardSongsForArtist(supabase, artist, heardNames) {
-  const { data: existingSongs } = await supabase.from('songs').select('name').eq('artist_id', artist.id);
-  const known = new Set((existingSongs ?? []).map((s) => normalizeSongName(s.name)));
+  const existingSongs = await fetchAll(() => supabase.from('songs').select('name').eq('artist_id', artist.id));
+  const known = new Set(existingSongs.map((s) => normalizeSongName(s.name)));
 
   const unmatched = [];
   heardNames.forEach((name) => {

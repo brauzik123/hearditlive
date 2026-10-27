@@ -4,6 +4,7 @@ import { createClient } from '../../utils/supabase/server';
 import { getI18n } from '../../i18n/server';
 import { cityName } from '../../utils/placeNames';
 import { countOutings, topByOutings } from '../../utils/outings';
+import { fetchAllIn } from '../../utils/fetchAll';
 
 function topCounts(items, keyFn, limit) {
   const counts = new Map();
@@ -53,9 +54,7 @@ export default async function Stats() {
 
   const entries = attended ?? [];
   const entryIds = entries.map((e) => e.id);
-  const { data: setlistRows } = entryIds.length
-    ? await supabase.from('entry_setlist').select('song_name').in('entry_id', entryIds)
-    : { data: [] };
+  const setlistRows = await fetchAllIn(() => supabase.from('entry_setlist').select('song_name'), 'entry_id', entryIds);
 
   // Cities and venues are counted by identity (a linked GeoNames city, a
   // venue row), so "Warsaw" and "Warszawa" are one city; festivals count
