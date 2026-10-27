@@ -35,7 +35,7 @@ export default async function FestivalPage({ params, searchParams }) {
     supabase
       .from('concert_entries')
       .select(
-        'id, entry_type, event_date, rating, ticket_status, artist_id, artists(name), venues(name, city, city_id, cities(name_en, name_pl)), entry_photos(url, is_cover)'
+        'id, entry_type, event_date, rating, ticket_status, is_support, artist_id, artists(name), venues(name, city, city_id, cities(name_en, name_pl)), entry_photos(url, is_cover)'
       )
       .eq('user_id', owner.id)
       .eq('festival_id', id)

@@ -6,7 +6,7 @@ import TicketStub from '../components/TicketStub';
 import PastPlans from '../components/PastPlans';
 import { countOutings } from '../utils/outings';
 
-const ENTRY_FIELDS = 'id, entry_type, event_date, rating, ticket_status, created_at, artists(name), venues(name, city, city_id, cities(name_en, name_pl))';
+const ENTRY_FIELDS = 'id, entry_type, event_date, rating, ticket_status, is_support, created_at, artists(name), venues(name, city, city_id, cities(name_en, name_pl))';
 
 export default async function Home() {
   const supabase = await createClient();
@@ -20,7 +20,7 @@ export default async function Home() {
   const [{ data: attended }, { data: lastShowRows }, { data: upcoming }, { data: followRows }, { data: pastPlans }] = await Promise.all([
     supabase
       .from('concert_entries')
-      .select('id, artist_id, festival_id, event_date, venues(city, city_id)')
+      .select('id, artist_id, festival_id, event_date, venue_id, venues(city, city_id)')
       .eq('user_id', user.id)
       .eq('entry_type', 'attended'),
     supabase

@@ -59,7 +59,7 @@ export default function Collection() {
       const { data, error } = await supabase
         .from('concert_entries')
         .select(
-          `id, entry_type, event_date, rating, ticket_status, is_favorite, festival_id,
+          `id, entry_type, event_date, rating, ticket_status, is_support, is_favorite, festival_id,
            artist_id, artists(name, image_url), venues(name, city, city_id, cities(name_en, name_pl)), festivals(name),
            entry_photos(url, is_cover)`
         )

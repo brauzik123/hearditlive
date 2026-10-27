@@ -10,7 +10,7 @@ import { cityName } from '../utils/placeNames';
 // Main part carries the artist and venue; the torn-off stub carries the
 // date (or ticket status for upcoming shows) and the rating.
 //
-// `entry` needs: id, entry_type, event_date, rating, ticket_status,
+// `entry` needs: id, entry_type, event_date, rating, ticket_status, is_support,
 // artists(name), venues(name, city, cities(name_en, name_pl)). `byline` (e.g. "alice was there") and
 // `meta` (e.g. "2 days ago") are optional, pre-rendered strings. `asLink`
 // is off on the entry's own page, where the ticket is the header.
@@ -35,7 +35,16 @@ export default function TicketStub({ entry, byline, meta, size = 'md', asLink = 
           </p>
         )}
         <h3 className={`marquee ${large ? 'text-5xl md:text-6xl [overflow-wrap:anywhere]' : 'truncate text-[1.75rem]'}`}>{artist}</h3>
-        {venue && <p className={`truncate text-paper-muted ${large ? 'text-base' : 'text-sm'}`}>{venue}</p>}
+        {(venue || entry.is_support) && (
+          <p className={`flex min-w-0 items-center gap-2 text-paper-muted ${large ? 'text-base' : 'text-sm'}`}>
+            {entry.is_support && (
+              <span className="shrink-0 rounded-full border border-paper-rule px-2 py-px text-[11px] font-semibold text-paper-ink">
+                {t('ticket.support')}
+              </span>
+            )}
+            {venue && <span className="truncate">{venue}</span>}
+          </p>
+        )}
       </div>
 
       <div className="ticket-stub shrink-0 flex flex-col items-center justify-center gap-1 py-3 text-center">

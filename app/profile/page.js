@@ -36,7 +36,7 @@ export default async function Profile() {
       .eq('entry_type', 'attended'),
     supabase
       .from('concert_entries')
-      .select('id, entry_type, event_date, rating, ticket_status, artists(name), venues(name, city, city_id, cities(name_en, name_pl))')
+      .select('id, entry_type, event_date, rating, ticket_status, is_support, artists(name), venues(name, city, city_id, cities(name_en, name_pl))')
       .eq('user_id', user.id)
       .eq('is_favorite', true)
       .order('event_date', { ascending: false })

@@ -33,6 +33,7 @@ const pl = {
   },
   ticket: {
     dateTba: 'TBA',
+    support: 'Support',
     rating: 'Ocena: {stars} na 10 gwiazdek',
   },
   ticketStatus: {
@@ -144,6 +145,9 @@ const pl = {
     festivalOther: 'Albo wpisz inny festiwal',
     festivalPlaceholder: 'np. Open’er',
     ratingLabel: 'Twoja ocena',
+    noRating: 'Bez oceny',
+    clearRating: 'Wyczyść',
+    isSupport: 'Support (występ przed gwiazdą wieczoru)',
     ratingValue: '{stars} na 10 gwiazdek',
     memories: 'Co zapamiętasz',
     memoriesPlaceholder: 'Co sprawiło, że ten koncert był wyjątkowy?',

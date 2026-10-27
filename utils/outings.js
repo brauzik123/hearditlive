@@ -1,11 +1,14 @@
 // An "outing" is one trip out: every set seen at the same festival in the
-// same year counts once (Open'er 2026 with 9 sets = 1 outing); any other
-// show is its own outing. Used wherever counting sets would inflate
+// same year counts once (Open'er 2026 with 9 sets = 1 outing), and so do
+// all shows on the same date at the same venue (a support act and the
+// headliner = 1 night out). Used wherever counting sets would inflate
 // numbers — events attended, venues visited, cities visited.
 //
-// Entries need: id, festival_id, event_date.
+// Entries need: id, festival_id, event_date, venue_id.
 export function outingKey(entry) {
-  if (!entry.festival_id) return `show:${entry.id}`;
+  if (!entry.festival_id) {
+    return entry.event_date && entry.venue_id ? `night:${entry.event_date}:${entry.venue_id}` : `show:${entry.id}`;
+  }
   const year = entry.event_date ? entry.event_date.slice(0, 4) : 'undated';
   return `festival:${entry.festival_id}:${year}`;
 }

@@ -26,6 +26,7 @@ const en = {
   },
   ticket: {
     dateTba: 'TBA',
+    support: 'Support',
     rating: 'Rated {stars} out of 10 stars',
   },
   ticketStatus: {
@@ -137,6 +138,9 @@ const en = {
     festivalOther: 'Or type another festival',
     festivalPlaceholder: 'e.g. Open’er',
     ratingLabel: 'Your rating',
+    noRating: 'Not rated',
+    clearRating: 'Clear',
+    isSupport: 'Support act (opened for the headliner)',
     ratingValue: '{stars} out of 10 stars',
     memories: 'What you remember',
     memoriesPlaceholder: 'What made this show special?',

@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Music, MapPin, Calendar, Star, Heart, X, Plus, ChevronLeft, ChevronRight, Check, Users,
-  Tag as TagIcon, Lock, Globe, Loader2, Search, ImagePlus, Tent,
+  Tag as TagIcon, Lock, Globe, Loader2, Search, ImagePlus, Tent, Mic2,
 } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
 import { useI18n } from '../../i18n/client';
@@ -29,7 +29,8 @@ const emptyForm = {
   isFestival: false,
   festivalName: '',
   ticketStatus: 'not_yet',
-  rating: 8,
+  rating: null, // optional: null = not rated
+  isSupport: false,
   description: '',
   isFavorite: false,
   photos: [], // { id, url (stored path) | blob (new), previewUrl, caption }
@@ -186,7 +187,8 @@ function LogEntry() {
         isFestival: !!entry.festivals,
         festivalName: entry.festivals?.name ?? '',
         ticketStatus: TICKET_STATUSES.includes(entry.ticket_status) ? entry.ticket_status : 'not_yet',
-        rating: entry.rating ?? 8,
+        rating: entry.rating != null ? Number(entry.rating) : null,
+        isSupport: !!entry.is_support,
         description: entry.description ?? '',
         isFavorite: entry.is_favorite,
         photos,
@@ -254,6 +256,7 @@ function LogEntry() {
         description: form.description.trim() || null,
         ticket_status: form.entryType === 'planned' ? form.ticketStatus : null,
         is_favorite: form.isFavorite,
+        is_support: form.isSupport,
         visibility: form.visibility,
         setlistfm_id: form.setlistfmId,
         setlistfm_url: form.setlistfmUrl,
@@ -566,6 +569,16 @@ function BasicsSection({ form, update, myFestivals }) {
           </div>
         </fieldset>
       )}
+
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={form.isSupport}
+          onChange={(e) => update({ isSupport: e.target.checked })}
+          className="h-4 w-4 accent-brand"
+        />
+        <Mic2 size={15} className="text-muted" /> {t('log.isSupport')}
+      </label>
 
       <FestivalField form={form} update={update} myFestivals={myFestivals} />
     </Section>
