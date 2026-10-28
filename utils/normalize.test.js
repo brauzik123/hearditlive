@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeSongName } from './normalize';
+import { normalizeSongName, sameArtistName } from './normalize';
 
 describe('normalizeSongName', () => {
   it('matches setlist titles to Spotify titles despite case and punctuation', () => {
@@ -25,5 +25,22 @@ describe('normalizeSongName', () => {
 
   it('treats a missing name as empty', () => {
     expect(normalizeSongName(null)).toBe('');
+  });
+});
+
+describe('sameArtistName', () => {
+  it('ignores capitals, accents, punctuation, "&" and a leading "The"', () => {
+    expect(sameArtistName('bts', 'BTS')).toBe(true);
+    expect(sameArtistName('Beyonce', 'Beyoncé')).toBe(true);
+    expect(sameArtistName('J Cole', 'J. Cole')).toBe(true);
+    expect(sameArtistName('Florence + the Machine', 'Florence and The Machine')).toBe(true);
+    expect(sameArtistName('Weeknd', 'The Weeknd')).toBe(true);
+  });
+
+  it('rejects a different artist', () => {
+    expect(sameArtistName('Bulleez n Nerdz', 'The Bullseyes')).toBe(false);
+    expect(sameArtistName('ArtistsCAN', 'Artists United Against Apartheid')).toBe(false);
+    expect(sameArtistName('Travis Scot', 'Travis Scott')).toBe(false);
+    expect(sameArtistName('', '')).toBe(false);
   });
 });

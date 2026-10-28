@@ -7,6 +7,8 @@
 // and the batch /albums?ids= endpoint is forbidden, so releases are paged
 // in parallel and albums are fetched one at a time with bounded concurrency.
 
+import { sameArtistName } from './normalize';
+
 let cachedToken = null; // { accessToken, expiresAt }
 
 async function getAccessToken() {
@@ -94,12 +96,13 @@ export async function mapLimit(items, limit, fn) {
   return results;
 }
 
-// Prefers an exact (case-insensitive) name match over Spotify's top hit, so
-// a common name doesn't silently resolve to a more popular namesake.
+// Only an artist with the same name counts as a match. Falling back to
+// Spotify's top hit linked bands to strangers ("Bulleez n Nerdz" to The
+// Bullseyes) and gave them someone else's discography; no match is better.
 export async function searchArtist(name) {
   const data = await spotifyFetch(`/search?q=${encodeURIComponent(name)}&type=artist&limit=5`);
   const items = data.artists?.items ?? [];
-  return items.find((a) => a.name.toLowerCase() === name.toLowerCase()) ?? items[0] ?? null;
+  return items.find((a) => sameArtistName(a.name, name)) ?? null;
 }
 
 export function bestImage(images) {

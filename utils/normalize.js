@@ -12,3 +12,19 @@ export function normalizeSongName(name) {
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 }
+
+// Whether two artist names are the same artist name, ignoring capitals,
+// accents, punctuation, "&" vs "and" and a leading "The" ("Beyoncé" =
+// "Beyonce", "Florence + the Machine" = "Florence and The Machine").
+export function sameArtistName(a, b) {
+  const key = (name) =>
+    (name ?? '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[&+]/g, ' and ')
+      .replace(/^\s*the\s+/, '')
+      .replace(/[^a-z0-9]+/g, '');
+  const ka = key(a);
+  return ka !== '' && ka === key(b);
+}
