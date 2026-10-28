@@ -30,11 +30,12 @@ export const emptyForm = {
   photos: [], // { id, url (stored path) | blob (new), previewUrl, caption }
   coverId: null, // id of the photo used as the cover, or null for none
   setlist: [],
-  attendees: [],
+  attendees: [], // { name, userId }: userId when it's a friend's account
   tags: [],
   visibility: 'inherit',
   setlistfmId: null,
   setlistfmUrl: null,
+  copiedFrom: null, // the friend's show this one was copied from
 };
 
 // Columns and relations entryToForm needs.
@@ -42,7 +43,7 @@ export const ENTRY_FORM_SELECT = `*, artists!concert_entries_artist_id_fkey(name
   entry_photos(id, url, caption, position, is_cover),
   entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist, artist_id, guest_artist_id,
     owner:artists!entry_setlist_artist_id_fkey(name), guest:artists!entry_setlist_guest_artist_id_fkey(name)),
-  entry_attendees(guest_name),
+  entry_attendees(guest_name, user_id, profiles(username)),
   entry_tags(tags(name))`;
 
 // ilike treats _ and % as wildcards; escape them for exact name matches.
@@ -94,11 +95,14 @@ export function entryToForm(entry, { locale, went = false }) {
         ownerName: s.owner?.name ?? (s.artist_id ? nameOf(s.artist_id) : null),
         guestName: s.guest?.name ?? null,
       })),
-    attendees: (entry.entry_attendees ?? []).map((a) => a.guest_name).filter(Boolean),
+    attendees: (entry.entry_attendees ?? [])
+      .map((a) => ({ name: a.profiles?.username ?? a.guest_name, userId: a.user_id ?? null }))
+      .filter((a) => a.name),
     tags: (entry.entry_tags ?? []).map((tag) => tag.tags?.name).filter(Boolean),
     visibility: entry.visibility ?? 'inherit',
     setlistfmId: entry.setlistfm_id ?? null,
     setlistfmUrl: entry.setlistfm_url ?? null,
+    copiedFrom: entry.copied_from ?? null,
   };
 }
 
@@ -165,6 +169,7 @@ export function entryPayload(form, { userId, artistId, venueId, festivalId }) {
     visibility: form.visibility,
     setlistfm_id: form.setlistfmId,
     setlistfm_url: form.setlistfmUrl,
+    copied_from: form.copiedFrom,
   };
 }
 
@@ -209,4 +214,38 @@ export function setlistRows(form, entryId, artistIdFor = () => null) {
       artist_id: s.ownerName ? artistIdFor(s.ownerName) : null,
       guest_artist_id: s.guestName?.trim() ? artistIdFor(s.guestName.trim()) : null,
     }));
+}
+
+// entry_attendees rows: friends by account, everyone else by name.
+export function attendeeRows(form, entryId) {
+  return form.attendees.map((a) =>
+    a.userId ? { entry_id: entryId, user_id: a.userId } : { entry_id: entryId, guest_name: a.name.trim() }
+  );
+}
+
+// A friend's show (loaded with entryToForm) as a new show of your own: the
+// shared parts (artists, date, place, festival, tour, setlist) stay; what's
+// personal (rating, notes, photos, tags, privacy) starts empty, and the
+// friend is marked as having been there with you.
+export function copyFromFriend(friendForm, { sourceId, friend }) {
+  return {
+    ...emptyForm,
+    entryType: friendForm.entryType,
+    artist: friendForm.artist,
+    coArtists: friendForm.coArtists,
+    venue: friendForm.venue,
+    city: friendForm.city,
+    cityGeonameId: friendForm.cityGeonameId,
+    setlistfmVenueId: friendForm.setlistfmVenueId,
+    date: friendForm.date,
+    tourName: friendForm.tourName,
+    isFestival: friendForm.isFestival,
+    festivalName: friendForm.festivalName,
+    isSupport: friendForm.isSupport,
+    setlist: friendForm.setlist.map((song) => ({ ...song, id: newId() })),
+    setlistfmId: friendForm.setlistfmId,
+    setlistfmUrl: friendForm.setlistfmUrl,
+    attendees: [{ name: friend.username, userId: friend.id }],
+    copiedFrom: sourceId,
+  };
 }

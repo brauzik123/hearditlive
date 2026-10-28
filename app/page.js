@@ -4,6 +4,7 @@ import { createClient } from '../utils/supabase/server';
 import { getI18n } from '../i18n/server';
 import TicketStub from '../components/TicketStub';
 import PastPlans from '../components/PastPlans';
+import TaggedShows from '../components/TaggedShows';
 import { countOutings } from '../utils/outings';
 import { checked } from '../utils/checked';
 
@@ -65,6 +66,29 @@ export default async function Home() {
     : { data: [] };
   const feed = feedRows ?? [];
 
+  // Friends' shows you were marked at and haven't logged yet: not copied
+  // already, and nothing of yours by the same artist on that date.
+  const { data: tagRows } = checked(
+    await supabase
+      .from('entry_attendees')
+      .select(`concert_entries(${ENTRY_FIELDS}, artist_id, user_id, profiles!concert_entries_user_id_fkey(username))`)
+      .eq('user_id', user.id)
+  );
+  const taggedAll = (tagRows ?? []).map((r) => r.concert_entries).filter((e) => e && e.user_id !== user.id);
+  let tagged = [];
+  if (taggedAll.length) {
+    const dates = [...new Set(taggedAll.map((e) => e.event_date).filter(Boolean))];
+    const [{ data: copies }, { data: sameDay }] = (await Promise.all([
+      supabase.from('concert_entries').select('copied_from').eq('user_id', user.id).in('copied_from', taggedAll.map((e) => e.id)),
+      dates.length
+        ? supabase.from('concert_entries').select('event_date, artist_id').eq('user_id', user.id).in('event_date', dates)
+        : Promise.resolve({ data: [] }),
+    ])).map(checked);
+    const copied = new Set((copies ?? []).map((c) => c.copied_from));
+    const logged = new Set((sameDay ?? []).map((e) => `${e.event_date}:${e.artist_id}`));
+    tagged = taggedAll.filter((e) => !copied.has(e.id) && !logged.has(`${e.event_date}:${e.artist_id}`));
+  }
+
   // Festivals count once per year, like the Stats page.
   const shows = countOutings(attended ?? []);
   // Joint shows count each billed artist.
@@ -85,6 +109,7 @@ export default async function Home() {
 
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-10 px-4 py-6 md:py-10">
+      {tagged.length > 0 && <TaggedShows entries={tagged} userId={user.id} />}
       {pastPlans?.length > 0 && <PastPlans entries={pastPlans} />}
 
       {isNewHere ? (

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Lock, Clock, UserPlus, UserMinus, Music2 } from 'lucide-react';
+import { Lock, Clock, UserPlus, UserMinus, Music2, Ticket } from 'lucide-react';
 import { createClient } from '../utils/supabase/client';
 import { useI18n } from '../i18n/client';
 import ProfileHeader from './ProfileHeader';
@@ -23,6 +23,7 @@ export default function OtherProfileView({
   initialFollowStatus,
   canViewContent,
   totalConcerts,
+  togetherEvents = 0,
   concerts,
 }) {
   const { t } = useI18n();
@@ -71,6 +72,12 @@ export default function OtherProfileView({
         followers={followers}
         following={following}
       />
+
+      {togetherEvents > 0 && (
+        <p className="flex items-center gap-2 text-sm text-brand">
+          <Ticket size={15} /> {t('stats.togetherEvents', { count: togetherEvents })}
+        </p>
+      )}
 
       {!isSelf && (
         <button

@@ -7,6 +7,8 @@ import { countOutings, topByOutings } from '../../utils/outings';
 import { fetchAllIn } from '../../utils/fetchAll';
 import { checked } from '../../utils/checked';
 import { billing, LINEUP_SIZE, rankArtists } from '../../utils/lineup';
+import { togetherCounts } from '../../utils/together';
+import Avatar from '../../components/Avatar';
 
 function topCounts(items, keyFn, limit) {
   const counts = new Map();
@@ -39,7 +41,7 @@ export default async function Stats() {
 
   const { data: attended } = checked(await supabase
     .from('concert_entries')
-    .select('id, artist_id, is_support, festival_id, event_date, venue_id, artists!concert_entries_artist_id_fkey(name), entry_co_artists(artist_id, position, artists(name)), festivals(name), venues(name, city, city_id, cities(name_en, name_pl))')
+    .select('id, artist_id, is_support, festival_id, event_date, venue_id, artists!concert_entries_artist_id_fkey(name), entry_co_artists(artist_id, position, artists(name)), festivals(name), venues(name, city, city_id, cities(name_en, name_pl)), entry_attendees(user_id, guest_name, profiles(username, avatar_url))')
     .eq('user_id', user.id)
     .eq('entry_type', 'attended'));
 
@@ -64,6 +66,7 @@ export default async function Stats() {
   ].map((s) => ({ ...s, label: t(s.key, { count: s.value }) }));
 
   const lineup = billing(ranked.slice(0, LINEUP_SIZE));
+  const together = togetherCounts(entries).slice(0, 5);
   const topSongs = topCounts(setlistRows ?? [], (s) => s.song_name, 10);
   const topVenues = topByOutings(
     entries,
@@ -134,6 +137,39 @@ export default async function Stats() {
                 </Link>
               </li>
             ))}
+          </ul>
+        </section>
+      )}
+
+      {together.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="marquee text-3xl">{t('stats.together')}</h2>
+          <ul className="flex flex-col">
+            {together.map((p) => {
+              const label = (
+                <>
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <Avatar username={p.name} src={p.avatar} size={28} />
+                    <span className="truncate">{p.name}</span>
+                  </span>
+                  <span className="shrink-0 text-sm text-muted">
+                    {t('stats.togetherEvents', { count: p.events })}
+                    {p.shows > p.events && <> · {t('stats.togetherShows', { count: p.shows })}</>}
+                  </span>
+                </>
+              );
+              return (
+                <li key={p.userId ?? p.name} className="border-b border-border last:border-b-0">
+                  {p.userId ? (
+                    <Link href={`/u/${p.name}`} className="flex items-center justify-between gap-3 py-2 hover:text-brand">
+                      {label}
+                    </Link>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3 py-2">{label}</div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

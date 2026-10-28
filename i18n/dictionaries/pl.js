@@ -57,6 +57,10 @@ const pl = {
     private: 'Tylko ja',
   },
   home: {
+    taggedTitle: 'Oznaczenia od znajomych',
+    taggedBy: 'Oznaczenie od: {name}',
+    taggedAdd: 'Dodaj do moich koncertów',
+    taggedNotMe: 'To nie ja',
     nextUp: 'Następny koncert',
     lastShow: 'Twój ostatni koncert',
     statShows: { one: 'koncert', few: 'koncerty', many: 'koncertów', other: 'koncertu' },
@@ -105,6 +109,8 @@ const pl = {
     noMatches: 'Żaden koncert nie pasuje do filtrów.',
   },
   entry: {
+    friendsAlsoLogged: 'Znajomi z tym koncertem w kolekcji',
+    friendsAlsoLoggedHint: 'Kliknij, żeby dodać do osób obecnych na koncercie.',
     guests: 'Goście: {names}',
     withGuest: 'gościnnie: {name}',
     backToCollection: 'Kolekcja',
@@ -128,6 +134,7 @@ const pl = {
     },
   },
   log: {
+    whoElseFriendsHint: 'Znajomi dodani tutaj mogą jednym kliknięciem dodać ten koncert do swojej kolekcji.',
     addGuest: 'Dodaj gościa w tym utworze',
     guest: 'Gość w tym utworze',
     guestPlaceholder: 'Gość, np. Żabson',
@@ -351,6 +358,9 @@ const pl = {
     noSongs: 'Brak piosenek.',
   },
   stats: {
+    together: 'Najczęściej z',
+    togetherEvents: { one: '{count} wspólne wydarzenie', few: '{count} wspólne wydarzenia', many: '{count} wspólnych wydarzeń', other: '{count} wspólnego wydarzenia' },
+    togetherShows: { one: '{count} koncert', few: '{count} koncerty', many: '{count} koncertów', other: '{count} koncertu' },
     lineupTitle: 'Twój line-up',
     empty: 'Dodaj kilka koncertów, a najczęściej oglądani wykonawcy zostaną tu headlinerami.',
     seenTimes: { one: 'Na żywo raz', few: 'Na żywo {count} razy', many: 'Na żywo {count} razy', other: 'Na żywo {count} razy' },

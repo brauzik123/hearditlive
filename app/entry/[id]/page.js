@@ -8,6 +8,7 @@ import TicketStub from '../../../components/TicketStub';
 import Avatar from '../../../components/Avatar';
 import { checked } from '../../../utils/checked';
 import { billedArtists } from '../../../utils/showArtists';
+import FriendsAlsoThere from '../../../components/FriendsAlsoThere';
 
 const VISIBILITY_ICON = { public: Globe, friends: UserCheck, private: Lock };
 const RANK = { public: 0, friends: 1, private: 2 };
@@ -29,7 +30,7 @@ export default async function EntryDetail({ params }) {
        entry_photos(id, url, caption, position),
        entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist, artist_id,
          guest:artists!entry_setlist_guest_artist_id_fkey(name)),
-       entry_attendees(guest_name),
+       entry_attendees(guest_name, user_id, profiles(username, avatar_url)),
        entry_tags(tags(name)),
        profiles!concert_entries_user_id_fkey(username, avatar_url, default_entry_visibility, profile_visibility)`
     )
@@ -66,7 +67,30 @@ export default async function EntryDetail({ params }) {
   // Guests who came on stage, in setlist order.
   const guests = [...new Set(setlist.map((s) => s.guest?.name).filter(Boolean))];
   const songOwner = (song) => (billed.length > 1 ? billed.find((a) => a.id === song.artist_id)?.name : null);
-  const attendees = (entry.entry_attendees ?? []).map((a) => a.guest_name).filter(Boolean);
+  // Friends tagged by account link to their profile; others are just names.
+  const attendees = (entry.entry_attendees ?? [])
+    .map((a) => ({ name: a.profiles?.username ?? a.guest_name, username: a.profiles?.username, avatar: a.profiles?.avatar_url }))
+    .filter((a) => a.name);
+
+  // On your own show: friends who logged it too and aren't marked yet.
+  let alsoThere = [];
+  if (isOwner && entry.event_date && entry.artist_id) {
+    const { data: friendRows } = checked(await supabase.from('friendships').select('friend_id').eq('user_id', user.id));
+    const marked = new Set((entry.entry_attendees ?? []).map((a) => a.user_id).filter(Boolean));
+    const candidates = (friendRows ?? []).map((r) => r.friend_id).filter((id) => !marked.has(id));
+    if (candidates.length) {
+      const { data: theirs } = checked(
+        await supabase
+          .from('concert_entries')
+          .select('user_id, profiles!concert_entries_user_id_fkey(id, username, avatar_url)')
+          .in('user_id', candidates)
+          .eq('event_date', entry.event_date)
+          .eq('artist_id', entry.artist_id)
+      );
+      const seen = new Set();
+      alsoThere = (theirs ?? []).map((e) => e.profiles).filter((p) => p && !seen.has(p.id) && seen.add(p.id));
+    }
+  }
   const tags = (entry.entry_tags ?? []).map((tag) => tag.tags?.name).filter(Boolean);
 
   const backHref = isOwner ? '/collection' : `/u/${ownerName}`;
@@ -184,15 +208,27 @@ export default async function EntryDetail({ params }) {
         </section>
       )}
 
+      {alsoThere.length > 0 && <FriendsAlsoThere entryId={entry.id} friends={alsoThere} />}
+
       {attendees.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="marquee text-3xl">{t('entry.whoWasThere')}</h2>
           <div className="flex flex-wrap gap-3">
-            {attendees.map((name) => (
-              <span key={name} className="flex items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 text-sm">
-                <Avatar username={name} size={26} /> {name}
-              </span>
-            ))}
+            {attendees.map((person) =>
+              person.username ? (
+                <Link
+                  key={person.name}
+                  href={`/u/${person.username}`}
+                  className="flex items-center gap-2 rounded-full border border-brand/60 py-1 pl-1 pr-3 text-sm transition hover:border-brand"
+                >
+                  <Avatar username={person.username} src={person.avatar} size={26} /> {person.name}
+                </Link>
+              ) : (
+                <span key={person.name} className="flex items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 text-sm">
+                  <Avatar username={person.name} size={26} /> {person.name}
+                </span>
+              )
+            )}
           </div>
         </section>
       )}

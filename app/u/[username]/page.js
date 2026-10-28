@@ -3,6 +3,7 @@ import OtherProfileView from '../../../components/OtherProfileView';
 import { createClient } from '../../../utils/supabase/server';
 import { getProfileAccess } from '../../../utils/profileAccess';
 import { checked } from '../../../utils/checked';
+import { countOutings } from '../../../utils/outings';
 
 export default async function OtherProfilePage({ params }) {
   const { username } = await params;
@@ -55,6 +56,20 @@ export default async function OtherProfilePage({ params }) {
     concerts = concertData ?? [];
   }
 
+  // Events together, from your own log (who you marked as being there).
+  let togetherEvents = 0;
+  if (viewer && !isSelf) {
+    const { data: shared } = checked(
+      await supabase
+        .from('concert_entries')
+        .select('id, festival_id, event_date, venue_id, entry_attendees!inner(user_id)')
+        .eq('user_id', viewer.id)
+        .eq('entry_type', 'attended')
+        .eq('entry_attendees.user_id', profile.id)
+    );
+    togetherEvents = countOutings(shared ?? []);
+  }
+
   return (
     <OtherProfileView
       profile={profile}
@@ -65,6 +80,7 @@ export default async function OtherProfilePage({ params }) {
       canViewContent={canViewContent}
       totalConcerts={totalConcerts}
       concerts={concerts}
+      togetherEvents={togetherEvents}
     />
   );
 }

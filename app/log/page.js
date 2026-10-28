@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
 import { useI18n } from '../../i18n/client';
-import { emptyForm, entryToForm, ENTRY_FORM_SELECT, STEPS } from './_lib/entryForm';
+import { copyFromFriend, emptyForm, entryToForm, ENTRY_FORM_SELECT, STEPS } from './_lib/entryForm';
 import { saveEntry } from './_lib/saveEntry';
 import { EntryTypeToggle, StepProgress } from './_components/fields';
 import { BasicsSection } from './_components/BasicsSection';
@@ -60,9 +60,28 @@ export default function LogPage() {
     // hidden. /log is prerendered, so this can't be initial state either
     // (it'd mismatch on hydration) — one extra render is the cost.
     const params = new URLSearchParams(window.location.search);
+
+    // ?copy= comes from Home's "Friends marked you here": a friend's show,
+    // pre-filled as a new show of your own.
+    const copyId = params.get('copy');
+    if (copyId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoadingEntry(true);
+      (async () => {
+        const { data: entry, error: fetchError } = await supabase
+          .from('concert_entries')
+          .select(`${ENTRY_FORM_SELECT}, owner:profiles!concert_entries_user_id_fkey(id, username)`)
+          .eq('id', copyId)
+          .single();
+        if (fetchError) setError(fetchError.message);
+        else setForm(copyFromFriend(entryToForm(entry, { locale }), { sourceId: entry.id, friend: entry.owner }));
+        setLoadingEntry(false);
+      })();
+      return;
+    }
+
     const id = params.get('edit');
     if (!id) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEditId(id);
     setLoadingEntry(true);
     (async () => {

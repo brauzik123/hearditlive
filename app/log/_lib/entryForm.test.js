@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   applySetlistfm,
+  attendeeRows,
   billedNames,
+  copyFromFriend,
   setlistArtistNames,
   emptyForm,
   entryPayload,
@@ -31,7 +33,7 @@ const savedEntry = {
     { song_name: 'FE!N', position: 1, is_encore: false, is_cover: false, cover_original_artist: null },
     { song_name: 'HYAENA', position: 0, is_encore: false, is_cover: false, cover_original_artist: null },
   ],
-  entry_attendees: [{ guest_name: 'Ola' }],
+  entry_attendees: [{ guest_name: 'Ola' }, { user_id: 'kuba-id', profiles: { username: 'kuba' } }],
   entry_tags: [{ tags: { name: 'rager' } }],
   visibility: null,
   setlistfm_id: null,
@@ -53,7 +55,10 @@ describe('entryToForm', () => {
       isSupport: true,
       isFavorite: false,
       coverId: 'p1',
-      attendees: ['Ola'],
+      attendees: [
+        { name: 'Ola', userId: null },
+        { name: 'kuba', userId: 'kuba-id' },
+      ],
       tags: ['rager'],
       visibility: 'inherit',
     });
@@ -263,5 +268,52 @@ describe('guests', () => {
       { locale: 'en' }
     );
     expect(form.setlist[0]).toMatchObject({ ownerName: 'Żabson', guestName: 'Żabson' });
+  });
+});
+
+describe('friends at shows', () => {
+  it('saves friends by account and everyone else by name', () => {
+    const form = { ...emptyForm, attendees: [{ name: 'kuba', userId: 'k' }, { name: ' Ola ', userId: null }] };
+    expect(attendeeRows(form, 'e1')).toEqual([
+      { entry_id: 'e1', user_id: 'k' },
+      { entry_id: 'e1', guest_name: 'Ola' },
+    ]);
+  });
+
+  it("copies a friend's show: shared parts kept, personal parts empty, the friend marked as there", () => {
+    const theirs = {
+      ...entryToForm(savedEntry, { locale: 'en' }),
+      entryType: 'attended',
+      rating: 9,
+      description: 'best night ever',
+      isFavorite: true,
+      tags: ['rager'],
+      visibility: 'friends',
+      photos: [{ id: 'p1' }],
+      coverId: 'p1',
+      coArtists: ['Young Igi'],
+      setlistfmId: 'sfm',
+    };
+    const mine = copyFromFriend(theirs, { sourceId: 'their-entry', friend: { id: 'k', username: 'kuba' } });
+    expect(mine).toMatchObject({
+      artist: 'Travis Scott',
+      coArtists: ['Young Igi'],
+      venue: 'PGE Narodowy',
+      date: '2026-07-10',
+      isSupport: true,
+      setlistfmId: 'sfm',
+      rating: null,
+      description: '',
+      isFavorite: false,
+      tags: [],
+      visibility: 'inherit',
+      photos: [],
+      coverId: null,
+      attendees: [{ name: 'kuba', userId: 'k' }],
+      copiedFrom: 'their-entry',
+    });
+    expect(mine.setlist.map((s) => s.name)).toEqual(theirs.setlist.map((s) => s.name));
+    // New ids, so editing your copy never touches theirs.
+    expect(mine.setlist[0].id).not.toBe(theirs.setlist[0].id);
   });
 });

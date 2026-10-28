@@ -1,6 +1,14 @@
 import { newId } from '../../../utils/id';
 import { sameArtistName } from '../../../utils/normalize';
-import { billedNames, entryPayload, exact, photosInSaveOrder, setlistArtistNames, setlistRows } from './entryForm';
+import {
+  attendeeRows,
+  billedNames,
+  entryPayload,
+  exact,
+  photosInSaveOrder,
+  setlistArtistNames,
+  setlistRows,
+} from './entryForm';
 
 // Writes a log entry (new or edited) and everything attached to it.
 // Returns the entry id.
@@ -138,9 +146,9 @@ export async function saveEntry(supabase, { form, editId }) {
     if (setlistError) throw setlistError;
   }
 
-  const attendeeRows = form.attendees.map((name) => ({ entry_id: entryId, guest_name: name }));
-  if (attendeeRows.length) {
-    const { error: attendeesError } = await supabase.from('entry_attendees').insert(attendeeRows);
+  const people = attendeeRows(form, entryId);
+  if (people.length) {
+    const { error: attendeesError } = await supabase.from('entry_attendees').insert(people);
     if (attendeesError) throw attendeesError;
   }
 

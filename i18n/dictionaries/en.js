@@ -50,6 +50,10 @@ const en = {
     private: 'Only me',
   },
   home: {
+    taggedTitle: 'Friends marked you here',
+    taggedBy: '{name} marked you as there',
+    taggedAdd: 'Add to my shows',
+    taggedNotMe: 'Not me',
     nextUp: 'Next up',
     lastShow: 'Your last show',
     statShows: { one: 'show', other: 'shows' },
@@ -98,6 +102,8 @@ const en = {
     noMatches: 'No shows match these filters.',
   },
   entry: {
+    friendsAlsoLogged: 'Friends who logged this show too',
+    friendsAlsoLoggedHint: 'Tap to mark them as there with you.',
     guests: 'Guests: {names}',
     withGuest: 'with {name}',
     backToCollection: 'Collection',
@@ -121,6 +127,7 @@ const en = {
     },
   },
   log: {
+    whoElseFriendsHint: 'Friends you add here can add this show to their own log with one tap.',
     addGuest: 'Add a guest who joined for this song',
     guest: 'Guest on this song',
     guestPlaceholder: 'Guest, e.g. Żabson',
@@ -339,6 +346,9 @@ const en = {
     noSongs: 'No songs here.',
   },
   stats: {
+    together: 'Most often with',
+    togetherEvents: { one: '{count} event together', other: '{count} events together' },
+    togetherShows: { one: '{count} show', other: '{count} shows' },
     lineupTitle: 'Your lineup',
     empty: 'Log a few shows and your most-seen artists headline here.',
     seenTimes: { one: 'Seen once', other: 'Seen {count} times' },
