@@ -90,7 +90,7 @@ export async function getSongsOverview(supabase, userId) {
     supabase
       .from('concert_entries')
       .select(
-        'id, artist_id, artists(id, name, image_url, catalog_synced_at), entry_co_artists(artist_id, position, artists(id, name, image_url, catalog_synced_at))'
+        'id, artist_id, artists!concert_entries_artist_id_fkey(id, name, image_url, catalog_synced_at), entry_co_artists(artist_id, position, artists(id, name, image_url, catalog_synced_at))'
       )
       .eq('user_id', userId)
       .eq('entry_type', 'attended')

@@ -7,7 +7,7 @@ import PastPlans from '../components/PastPlans';
 import { countOutings } from '../utils/outings';
 import { checked } from '../utils/checked';
 
-const ENTRY_FIELDS = 'id, entry_type, event_date, rating, ticket_status, is_support, created_at, artists(name), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, cities(name_en, name_pl))';
+const ENTRY_FIELDS = 'id, entry_type, event_date, rating, ticket_status, is_support, created_at, artists!concert_entries_artist_id_fkey(name), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, cities(name_en, name_pl))';
 
 export default async function Home() {
   const supabase = await createClient();

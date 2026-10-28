@@ -38,7 +38,7 @@ export const emptyForm = {
 };
 
 // Columns and relations entryToForm needs.
-export const ENTRY_FORM_SELECT = `*, artists(name), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, setlistfm_id, cities(name_en, name_pl)), festivals(name),
+export const ENTRY_FORM_SELECT = `*, artists!concert_entries_artist_id_fkey(name), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, setlistfm_id, cities(name_en, name_pl)), festivals(name),
   entry_photos(id, url, caption, position, is_cover),
   entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist, artist_id, guest_artist_id,
     owner:artists!entry_setlist_artist_id_fkey(name), guest:artists!entry_setlist_guest_artist_id_fkey(name)),

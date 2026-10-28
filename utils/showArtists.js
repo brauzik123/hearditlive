@@ -4,6 +4,10 @@ import { sameArtistName } from './normalize';
 // entry_co_artists holds the rest (joint tours, duos). Expects
 // artist_id, artists(name) and entry_co_artists(artist_id, position, artists(name)).
 
+// entry_co_artists links shows and artists a second way, so a query from
+// concert_entries must name the main-artist link explicitly:
+// artists!concert_entries_artist_id_fkey(name) (a bare artists(name) fails).
+
 // Supabase select fragment for the co-billed artists.
 export const CO_ARTISTS_FIELDS = 'entry_co_artists(artist_id, position, artists(name))';
 

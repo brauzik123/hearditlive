@@ -61,7 +61,7 @@ export default function Collection() {
         .from('concert_entries')
         .select(
           `id, entry_type, event_date, rating, ticket_status, is_support, is_favorite, festival_id,
-           artist_id, artists(name, image_url), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, cities(name_en, name_pl)), festivals(name),
+           artist_id, artists!concert_entries_artist_id_fkey(name, image_url), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, cities(name_en, name_pl)), festivals(name),
            entry_photos(url, is_cover)`
         )
         .eq('user_id', user.id)
