@@ -5,6 +5,7 @@ import { getI18n } from '../../i18n/server';
 import { cityName } from '../../utils/placeNames';
 import { countOutings, topByOutings } from '../../utils/outings';
 import { fetchAllIn } from '../../utils/fetchAll';
+import { checked } from '../../utils/checked';
 
 function topCounts(items, keyFn, limit) {
   const counts = new Map();
@@ -46,11 +47,11 @@ export default async function Stats() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: attended } = await supabase
+  const { data: attended } = checked(await supabase
     .from('concert_entries')
     .select('id, festival_id, event_date, venue_id, artists(name), festivals(name), venues(name, city, city_id, cities(name_en, name_pl))')
     .eq('user_id', user.id)
-    .eq('entry_type', 'attended');
+    .eq('entry_type', 'attended'));
 
   const entries = attended ?? [];
   const entryIds = entries.map((e) => e.id);

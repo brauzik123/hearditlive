@@ -5,6 +5,7 @@ import { createClient } from '../../../utils/supabase/server';
 import { getI18n } from '../../../i18n/server';
 import { getProfileAccess } from '../../../utils/profileAccess';
 import TicketStub from '../../../components/TicketStub';
+import { checked } from '../../../utils/checked';
 
 // One festival, as one person experienced it: every year they went, the
 // dates, each set as a ticket, and the photos from those sets. Yours by
@@ -30,7 +31,7 @@ export default async function FestivalPage({ params, searchParams }) {
     owner = { id: user.id, username: null };
   }
 
-  const [{ data: festival }, { data: rows }] = await Promise.all([
+  const [{ data: festival }, { data: rows }] = (await Promise.all([
     supabase.from('festivals').select('id, name, city').eq('id', id).maybeSingle(),
     supabase
       .from('concert_entries')
@@ -40,7 +41,7 @@ export default async function FestivalPage({ params, searchParams }) {
       .eq('user_id', owner.id)
       .eq('festival_id', id)
       .order('event_date', { ascending: true, nullsFirst: false }),
-  ]);
+  ])).map(checked);
   if (!festival || !rows?.length) notFound();
 
   // Cover photos of every set, signed in one batch.

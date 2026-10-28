@@ -1,3 +1,4 @@
+import { checked } from './checked';
 // Who's looking at whose profile, and whether they may see its content.
 // Mirrors the database rule (entry_visible_to_viewer): public profiles are
 // open, friends-only needs a mutual follow, private is owner-only. The
@@ -10,11 +11,13 @@ export async function getProfileAccess(supabase, username) {
   // ilike matches case-insensitively, but treats _ and % as wildcards —
   // escape them so "qa_bob" can't also match "qaxbob".
   const pattern = username.replace(/[\\%_]/g, (c) => `\\${c}`);
-  const { data: profile } = await supabase
+  const { data: profile } = checked(
+    await supabase
     .from('profiles')
     .select('id, username, bio, avatar_url, profile_visibility')
     .ilike('username', pattern)
-    .maybeSingle();
+    .maybeSingle()
+  );
   if (!profile) return null;
 
   const isSelf = viewer?.id === profile.id;

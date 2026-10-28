@@ -5,6 +5,7 @@ import { getI18n } from '../i18n/server';
 import TicketStub from '../components/TicketStub';
 import PastPlans from '../components/PastPlans';
 import { countOutings } from '../utils/outings';
+import { checked } from '../utils/checked';
 
 const ENTRY_FIELDS = 'id, entry_type, event_date, rating, ticket_status, is_support, created_at, artists(name), venues(name, city, city_id, cities(name_en, name_pl))';
 
@@ -17,7 +18,7 @@ export default async function Home() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const [{ data: attended }, { data: lastShowRows }, { data: upcoming }, { data: followRows }, { data: pastPlans }] = await Promise.all([
+  const [{ data: attended }, { data: lastShowRows }, { data: upcoming }, { data: followRows }, { data: pastPlans }] = (await Promise.all([
     supabase
       .from('concert_entries')
       .select('id, artist_id, festival_id, event_date, venue_id, venues(city, city_id)')
@@ -48,19 +49,19 @@ export default async function Home() {
       .lt('event_date', today)
       .order('event_date', { ascending: false })
       .limit(3),
-  ]);
+  ])).map(checked);
 
   // Activity feed: latest entries from people you follow. Visibility is
   // enforced by the database (private profiles, friends-only entries), so
   // this only ever returns what you're allowed to see.
   const followedIds = (followRows ?? []).map((f) => f.followee_id);
   const { data: feedRows } = followedIds.length
-    ? await supabase
+    ? checked(await supabase
         .from('concert_entries')
         .select(`${ENTRY_FIELDS}, profiles!concert_entries_user_id_fkey(username)`)
         .in('user_id', followedIds)
         .order('created_at', { ascending: false })
-        .limit(20)
+        .limit(20))
     : { data: [] };
   const feed = feedRows ?? [];
 

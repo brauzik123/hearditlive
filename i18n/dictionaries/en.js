@@ -3,6 +3,15 @@ const en = {
   meta: {
     description: 'Your concert logbook: every show, every setlist, every song you heard live.',
   },
+  errors: {
+    notFoundTitle: 'Nothing here',
+    notFoundBody: "This page doesn't exist, or it isn't shared with you.",
+    errorTitle: 'Something went wrong',
+    errorBody: "This page couldn't load. It's usually temporary, so try again.",
+    retry: 'Try again',
+    home: 'Go home',
+    code: 'Error code: {code}',
+  },
   common: {
     add: 'Add',
     back: 'Back',

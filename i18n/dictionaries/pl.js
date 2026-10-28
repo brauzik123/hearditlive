@@ -5,6 +5,15 @@ const pl = {
   meta: {
     description: 'Twój dziennik koncertów: każdy koncert, każda setlista, każda piosenka usłyszana na żywo.',
   },
+  errors: {
+    notFoundTitle: 'Nic tu nie ma',
+    notFoundBody: 'Ta strona nie istnieje albo nie jest udostępniona.',
+    errorTitle: 'Coś poszło nie tak',
+    errorBody: 'Nie udało się wczytać tej strony. Zwykle to chwilowy problem, więc spróbuj ponownie.',
+    retry: 'Spróbuj ponownie',
+    home: 'Strona główna',
+    code: 'Kod błędu: {code}',
+  },
   common: {
     add: 'Dodaj',
     back: 'Wstecz',

@@ -1,5 +1,6 @@
 import { normalizeSongName } from './normalize';
 import { fetchAll, fetchAllIn } from './fetchAll';
+import { checked } from './checked';
 
 // Data for the Songs section, for any user — your own (/songs) or someone
 // else's (/u/[username]/songs). Queries run with the *viewer's* session, so
@@ -8,12 +9,14 @@ import { fetchAll, fetchAllIn } from './fetchAll';
 
 // Grid of every artist the user has heard live, with coverage stats.
 export async function getSongsOverview(supabase, userId) {
-  const { data: entries } = await supabase
+  const { data: entries } = checked(
+    await supabase
     .from('concert_entries')
     .select('id, artist_id, artists(id, name, image_url, catalog_synced_at)')
     .eq('user_id', userId)
     .eq('entry_type', 'attended')
-    .not('artist_id', 'is', null);
+    .not('artist_id', 'is', null)
+  );
 
   const rows = entries ?? [];
   const artistsById = new Map();
@@ -30,10 +33,9 @@ export async function getSongsOverview(supabase, userId) {
     entryIds
   );
 
-  const { data: exclusionRows } = await supabase
-    .from('song_count_exclusions')
-    .select('artist_id, song_name')
-    .eq('user_id', userId);
+  const { data: exclusionRows } = checked(
+    await supabase.from('song_count_exclusions').select('artist_id, song_name').eq('user_id', userId)
+  );
   const excluded = new Set((exclusionRows ?? []).map((r) => `${r.artist_id}::${r.song_name}`));
 
   const namesByArtist = new Map();
@@ -86,14 +88,15 @@ export async function getArtistSongs(supabase, userId, artistId) {
   // so fetch it all at once — this renders purely from cache.
   const [{ data: artist }, { data: attendedEntries }, { data: exclusionRows }, catalogSongs, { data: albumRows }] =
     await Promise.all([
-      supabase.from('artists').select('*').eq('id', artistId).maybeSingle(),
+      supabase.from('artists').select('*').eq('id', artistId).maybeSingle().then(checked),
       supabase
         .from('concert_entries')
         .select('id')
         .eq('user_id', userId)
         .eq('artist_id', artistId)
-        .eq('entry_type', 'attended'),
-      supabase.from('song_count_exclusions').select('song_name').eq('user_id', userId).eq('artist_id', artistId),
+        .eq('entry_type', 'attended')
+        .then(checked),
+      supabase.from('song_count_exclusions').select('song_name').eq('user_id', userId).eq('artist_id', artistId).then(checked),
       fetchAll(() =>
         supabase
           .from('songs')
@@ -105,7 +108,8 @@ export async function getArtistSongs(supabase, userId, artistId) {
         .select('id, name, image_url, release_date, total_tracks')
         .eq('artist_id', artistId)
         .eq('bucket', 'album')
-        .order('release_date', { ascending: false }),
+        .order('release_date', { ascending: false })
+        .then(checked),
     ]);
   if (!artist || !attendedEntries?.length) return null;
 
@@ -167,7 +171,9 @@ export async function getArtistSongs(supabase, userId, artistId) {
 
   // Bands the artist is in (Quavo → Migos): heard songs that aren't the
   // artist's own but are in a band's catalog go under that band.
-  const { data: groupLinks } = await supabase.from('artist_groups').select('group_id').eq('artist_id', artistId);
+  const { data: groupLinks } = checked(
+    await supabase.from('artist_groups').select('group_id').eq('artist_id', artistId)
+  );
   const groupIds = (groupLinks ?? []).map((g) => g.group_id);
   const groups = [];
   if (groupIds.length) {

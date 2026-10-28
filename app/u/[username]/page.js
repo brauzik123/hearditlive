@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import OtherProfileView from '../../../components/OtherProfileView';
 import { createClient } from '../../../utils/supabase/server';
 import { getProfileAccess } from '../../../utils/profileAccess';
+import { checked } from '../../../utils/checked';
 
 export default async function OtherProfilePage({ params }) {
   const { username } = await params;
@@ -37,7 +38,7 @@ export default async function OtherProfilePage({ params }) {
   if (canViewContent) {
     // Individual entries can still be hidden (friends-only / only-me); the
     // database filters those, so counts and lists reflect what you can see.
-    const [{ count }, { data: concertData }] = await Promise.all([
+    const [{ count }, { data: concertData }] = (await Promise.all([
       supabase
         .from('concert_entries')
         .select('*', { count: 'exact', head: true })
@@ -49,7 +50,7 @@ export default async function OtherProfilePage({ params }) {
         .eq('user_id', profile.id)
         .order('event_date', { ascending: false, nullsFirst: false })
         .limit(100),
-    ]);
+    ])).map(checked);
     totalConcerts = count ?? 0;
     concerts = concertData ?? [];
   }

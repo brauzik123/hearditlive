@@ -6,6 +6,7 @@ import { getI18n } from '../../../i18n/server';
 import DeleteEntryButton from '../../../components/DeleteEntryButton';
 import TicketStub from '../../../components/TicketStub';
 import Avatar from '../../../components/Avatar';
+import { checked } from '../../../utils/checked';
 
 const VISIBILITY_ICON = { public: Globe, friends: UserCheck, private: Lock };
 const RANK = { public: 0, friends: 1, private: 2 };
@@ -19,7 +20,8 @@ export default async function EntryDetail({ params }) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: entry } = await supabase
+  const { data: entry } = checked(
+    await supabase
     .from('concert_entries')
     .select(
       `*, artists(name), venues(name, city, city_id, cities(name_en, name_pl)), festivals(name),
@@ -30,7 +32,8 @@ export default async function EntryDetail({ params }) {
        profiles!concert_entries_user_id_fkey(username, avatar_url, default_entry_visibility, profile_visibility)`
     )
     .eq('id', id)
-    .maybeSingle();
+    .maybeSingle()
+  );
 
   if (!entry) notFound();
 

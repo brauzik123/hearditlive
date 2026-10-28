@@ -6,6 +6,7 @@ import CopyButton from '../../components/CopyButton';
 import ProfileHeader from '../../components/ProfileHeader';
 import TicketStub from '../../components/TicketStub';
 import Avatar from '../../components/Avatar';
+import { checked } from '../../utils/checked';
 
 export default async function Profile() {
   const supabase = await createClient();
@@ -23,7 +24,7 @@ export default async function Profile() {
     { data: favorites },
     { data: friendRows },
     { count: pendingRequests },
-  ] = await Promise.all([
+  ] = (await Promise.all([
     supabase.from('profiles').select('username, bio, avatar_url, profile_visibility').eq('id', user.id).single(),
     // friend_code isn't selectable directly (it'd be visible to everyone).
     supabase.rpc('my_friend_code'),
@@ -43,11 +44,11 @@ export default async function Profile() {
       .limit(6),
     supabase.from('friendships').select('friend_id').eq('user_id', user.id).limit(12),
     supabase.from('follows').select('*', { count: 'exact', head: true }).eq('followee_id', user.id).eq('status', 'pending'),
-  ]);
+  ])).map(checked);
 
   const friendIds = (friendRows ?? []).map((f) => f.friend_id);
   const { data: friendProfiles } = friendIds.length
-    ? await supabase.from('profiles').select('id, username, avatar_url').in('id', friendIds)
+    ? checked(await supabase.from('profiles').select('id, username, avatar_url').in('id', friendIds))
     : { data: [] };
   const friends = friendProfiles ?? [];
 
