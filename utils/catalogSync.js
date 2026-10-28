@@ -3,7 +3,6 @@ import {
   getArtistReleases,
   getAlbumTracks,
   searchTracks,
-  bestImage,
   mapLimit,
   spotifyBlockedUntil,
   blockSpotify,
@@ -11,56 +10,13 @@ import {
 } from './spotify';
 import { normalizeSongName } from './normalize';
 import { fetchAll } from './fetchAll';
+import { buildCatalog, orderReleases, pickEditions } from './releases';
 import { findArtistMbid, getBandMemberships } from './musicbrainz';
 
 export { normalizeSongName };
 
 const SYNC_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-// Spotify files EPs under album_type "single"; anything this long gets its
-// own tile like an album (Spotify's own EP threshold).
-const EP_MIN_TRACKS = 4;
 const MAX_SONG_LOOKUPS_PER_SYNC = 50;
-
-function isTile(release) {
-  return release.album_type === 'album' || release.total_tracks >= EP_MIN_TRACKS;
-}
-
-// "Half Blood" and "Half Blood (BloodLuxe)", or clean/explicit duplicates,
-// share an edition key — only the most complete edition is kept.
-function editionKey(release) {
-  const base = release.name.replace(/\s*[([][^)\]]*[)\]]\s*$/, '').replace(/\s+-\s+[^-]*$/, '');
-  return `${isTile(release) ? 'tile' : 'single'}::${normalizeSongName(base)}`;
-}
-
-// Live albums re-release songs that belong to studio albums ("Live at
-// Kilmainham Gaol"), so they'd steal those songs from their real home.
-const LIVE_RELEASE = /(^|\s|\(|\[|-\s*)live(\s+(at|from|in|on)\b|\s*[)\]]|$)/i;
-
-function pickEditions(allReleases) {
-  const releases = allReleases.filter((r) => !LIVE_RELEASE.test(r.name));
-  const byKey = new Map();
-  releases.forEach((release) => {
-    const key = editionKey(release);
-    const current = byKey.get(key);
-    if (!current || release.total_tracks > current.total_tracks) byKey.set(key, release);
-  });
-  // Albums first, then EPs, then singles, and oldest first within each:
-  // when a song appears on several releases, the first one claims it — so
-  // it stays with the album it originally came out on, not a later
-  // deluxe/expanded reissue under a different title.
-  const rank = (r) => (r.album_type === 'album' ? 0 : isTile(r) ? 1 : 2);
-  return [...byKey.values()].sort(
-    (a, b) => rank(a) - rank(b) || (a.release_date ?? '').localeCompare(b.release_date ?? '')
-  );
-}
-
-function toDate(releaseDate) {
-  if (!releaseDate) return null;
-  const parts = releaseDate.split('-');
-  if (parts.length === 1) return `${parts[0]}-01-01`;
-  if (parts.length === 2) return `${parts[0]}-${parts[1]}-01`;
-  return releaseDate;
-}
 
 // A claim older than this is assumed abandoned (crashed/timed-out request).
 const SYNC_CLAIM_TTL_MS = 2 * 60 * 1000;
@@ -129,52 +85,13 @@ export async function ensureArtistSynced(supabase, artist) {
 async function syncCatalog(supabase, artist) {
   const resolved = await ensureArtistImage(supabase, artist);
   const all = resolved.spotify_id ? pickEditions(await getArtistReleases(resolved.spotify_id)) : [];
-
-  // Spotify lists every release the artist is credited on as a main
-  // artist, including other people's singles ("Congratulations (Remix)" by
-  // Post Malone shows up under Quavo). Only releases where they're the
-  // first credit are their own; the rest are guest appearances. Own
-  // releases go first so a song lands on the artist's own release when it
-  // appears on both.
-  const isOwn = (release) => release.artists?.[0]?.id === resolved.spotify_id;
-  const releases = [...all.filter(isOwn), ...all.filter((r) => !isOwn(r))];
+  const releases = orderReleases(all, resolved.spotify_id);
 
   // One-track singles need no extra request: the release is the song.
   const tracklists = await mapLimit(releases, 5, (release) =>
     release.total_tracks > 1 ? getAlbumTracks(release.id) : [{ id: release.id, name: release.name }]
   );
-
-  const albums = [];
-  const songs = [];
-  const seen = new Set();
-  releases.forEach((release, i) => {
-    const own = isOwn(release);
-    const tile = own && isTile(release);
-    if (tile) {
-      albums.push({
-        spotify_album_id: release.id,
-        name: release.name,
-        release_date: toDate(release.release_date),
-        image_url: bestImage(release.images),
-        total_tracks: release.total_tracks,
-      });
-    }
-    tracklists[i].forEach((track, position) => {
-      // On someone else's multi-track release, only the songs this artist
-      // is actually on count (a one-track single carries no artist list).
-      if (!own && track.artists && !track.artists.some((a) => a.id === resolved.spotify_id)) return;
-      const key = normalizeSongName(track.name);
-      if (!key || seen.has(key)) return;
-      seen.add(key);
-      songs.push({
-        name: track.name,
-        spotify_track_id: track.id,
-        spotify_album_id: tile ? release.id : null,
-        track_number: position + 1,
-        is_feature: !own,
-      });
-    });
-  });
+  const { albums, songs } = buildCatalog(releases, tracklists, resolved.spotify_id);
 
   const { error } = await supabase.rpc('replace_artist_catalog', {
     p_artist_id: artist.id,

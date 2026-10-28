@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Star } from 'lucide-react';
 import { useI18n } from '../i18n/client';
-import { formatRating } from './StarRating';
+import { formatRating } from '../utils/rating';
 import { cityName } from '../utils/placeNames';
 
 // The app's signature object: one logged show as a paper ticket stub.

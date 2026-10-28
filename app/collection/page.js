@@ -6,7 +6,7 @@ import { Search, List, Image as ImageIcon, Star, Loader2, Music2, ChevronDown, C
 import { createClient } from '../../utils/supabase/client';
 import { useI18n } from '../../i18n/client';
 import TicketStub from '../../components/TicketStub';
-import { formatRating } from '../../components/StarRating';
+import { formatRating } from '../../utils/rating';
 import { cityName } from '../../utils/placeNames';
 
 const SORTS = ['date_desc', 'date_asc', 'rating_desc', 'artist_asc'];

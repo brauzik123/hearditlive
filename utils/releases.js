@@ -1,0 +1,106 @@
+import { bestImage } from './spotify';
+import { normalizeSongName } from './normalize';
+
+// Turning an artist's Spotify releases into the Songs catalog: which
+// releases to keep, which get an album tile, and which song lands where.
+// Pure functions, no network — catalogSync.js fetches, these decide.
+
+// Spotify files EPs under album_type "single"; anything this long gets its
+// own tile like an album (Spotify's own EP threshold).
+const EP_MIN_TRACKS = 4;
+
+export function isTile(release) {
+  return release.album_type === 'album' || release.total_tracks >= EP_MIN_TRACKS;
+}
+
+// "Half Blood" and "Half Blood (BloodLuxe)", or clean/explicit duplicates,
+// share an edition key — only the most complete edition is kept.
+export function editionKey(release) {
+  const base = release.name.replace(/\s*[([][^)\]]*[)\]]\s*$/, '').replace(/\s+-\s+[^-]*$/, '');
+  return `${isTile(release) ? 'tile' : 'single'}::${normalizeSongName(base)}`;
+}
+
+// Live albums re-release songs that belong to studio albums ("Live at
+// Kilmainham Gaol"), so they'd steal those songs from their real home.
+export const LIVE_RELEASE = /(^|\s|\(|\[|-\s*)live(\s+(at|from|in|on)\b|\s*[)\]]|$)/i;
+
+export function pickEditions(allReleases) {
+  const releases = allReleases.filter((r) => !LIVE_RELEASE.test(r.name));
+  const byKey = new Map();
+  releases.forEach((release) => {
+    const key = editionKey(release);
+    const current = byKey.get(key);
+    if (!current || release.total_tracks > current.total_tracks) byKey.set(key, release);
+  });
+  // Albums first, then EPs, then singles, and oldest first within each:
+  // when a song appears on several releases, the first one claims it — so
+  // it stays with the album it originally came out on, not a later
+  // deluxe/expanded reissue under a different title.
+  const rank = (r) => (r.album_type === 'album' ? 0 : isTile(r) ? 1 : 2);
+  return [...byKey.values()].sort(
+    (a, b) => rank(a) - rank(b) || (a.release_date ?? '').localeCompare(b.release_date ?? '')
+  );
+}
+
+// Spotify release dates can be just a year or a year and month.
+export function toDate(releaseDate) {
+  if (!releaseDate) return null;
+  const parts = releaseDate.split('-');
+  if (parts.length === 1) return `${parts[0]}-01-01`;
+  if (parts.length === 2) return `${parts[0]}-${parts[1]}-01`;
+  return releaseDate;
+}
+
+// Spotify lists every release the artist is credited on as a main artist,
+// including other people's singles ("Congratulations (Remix)" by Post
+// Malone shows up under Quavo). Only releases where they're the first
+// credit are their own; the rest are guest appearances.
+export function isOwnRelease(release, spotifyId) {
+  return release.artists?.[0]?.id === spotifyId;
+}
+
+// Own releases first, so a song lands on the artist's own release when it
+// appears on both.
+export function orderReleases(releases, spotifyId) {
+  return [
+    ...releases.filter((r) => isOwnRelease(r, spotifyId)),
+    ...releases.filter((r) => !isOwnRelease(r, spotifyId)),
+  ];
+}
+
+// `releases` in claim order (see orderReleases) and their tracklists at the
+// same index. Returns the rows replace_artist_catalog saves.
+export function buildCatalog(releases, tracklists, spotifyId) {
+  const albums = [];
+  const songs = [];
+  const seen = new Set();
+  releases.forEach((release, i) => {
+    const own = isOwnRelease(release, spotifyId);
+    const tile = own && isTile(release);
+    if (tile) {
+      albums.push({
+        spotify_album_id: release.id,
+        name: release.name,
+        release_date: toDate(release.release_date),
+        image_url: bestImage(release.images),
+        total_tracks: release.total_tracks,
+      });
+    }
+    tracklists[i].forEach((track, position) => {
+      // On someone else's multi-track release, only the songs this artist
+      // is actually on count (a one-track single carries no artist list).
+      if (!own && track.artists && !track.artists.some((a) => a.id === spotifyId)) return;
+      const key = normalizeSongName(track.name);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      songs.push({
+        name: track.name,
+        spotify_track_id: track.id,
+        spotify_album_id: tile ? release.id : null,
+        track_number: position + 1,
+        is_feature: !own,
+      });
+    });
+  });
+  return { albums, songs };
+}
