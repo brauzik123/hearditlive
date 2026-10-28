@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '../../../../utils/supabase/server';
 import { createAdminClient } from '../../../../utils/supabase/admin';
+import { rateLimit } from '../../../../utils/rateLimit';
 import { ensureCity } from '../../../../utils/places';
 
 const exact = (value) => value.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -15,6 +16,8 @@ export async function POST(request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
+  const limited = await rateLimit(createAdminClient(), 'venueResolve', user.id);
+  if (limited) return limited;
 
   const body = await request.json();
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 200) : '';

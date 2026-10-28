@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '../../../../utils/supabase/server';
 import { createAdminClient } from '../../../../utils/supabase/admin';
+import { rateLimit } from '../../../../utils/rateLimit';
 import { fetchAllIn } from '../../../../utils/fetchAll';
 import { ensureArtistGroups, ensureArtistSynced, isInBackoff, resolveHeardSongsForArtist } from '../../../../utils/catalogSync';
 
@@ -18,6 +19,8 @@ export async function POST(request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
+  const limited = await rateLimit(createAdminClient(), 'syncArtist', user.id);
+  if (limited) return limited;
 
   const { artistId, userId } = await request.json();
   if (typeof artistId !== 'string') return NextResponse.json({ error: 'artistId is required' }, { status: 400 });

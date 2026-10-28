@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '../../../../utils/supabase/server';
 import { createAdminClient } from '../../../../utils/supabase/admin';
+import { rateLimit } from '../../../../utils/rateLimit';
 import { blockSpotify, ensureArtistImage, spotifyBlockedUntil, SpotifyRateLimitError } from '../../../../utils/spotify';
 
 export async function POST(request) {
@@ -9,6 +10,8 @@ export async function POST(request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
+  const limited = await rateLimit(createAdminClient(), 'artistImage', user.id);
+  if (limited) return limited;
 
   const { artistId } = await request.json();
   if (typeof artistId !== 'string') return NextResponse.json({ error: 'artistId is required' }, { status: 400 });

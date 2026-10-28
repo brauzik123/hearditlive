@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '../../../../utils/supabase/server';
 import { createAdminClient } from '../../../../utils/supabase/admin';
+import { rateLimit } from '../../../../utils/rateLimit';
 
 // Storage files don't cascade with database rows, so collect every file
 // under the user's folder first. Photo paths are {userId}/{entryId}/{file},
@@ -28,6 +29,8 @@ export async function POST(request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
+  const limited = await rateLimit(createAdminClient(), 'accountDelete', user.id);
+  if (limited) return limited;
 
   // The client must echo the username back, so a stray request can't wipe
   // an account without the user having typed it.

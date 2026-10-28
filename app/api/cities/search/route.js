@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '../../../../utils/supabase/server';
+import { createAdminClient } from '../../../../utils/supabase/admin';
+import { rateLimit } from '../../../../utils/rateLimit';
 import { searchCities } from '../../../../utils/places';
 
 // City suggestions for the log form ("Warsz…" → Warszawa, Polska).
@@ -9,6 +11,8 @@ export async function GET(request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
+  const limited = await rateLimit(createAdminClient(), 'citySearch', user.id);
+  if (limited) return limited;
 
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q')?.trim() ?? '';

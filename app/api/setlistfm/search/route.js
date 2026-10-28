@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '../../../../utils/supabase/server';
+import { createAdminClient } from '../../../../utils/supabase/admin';
+import { rateLimit } from '../../../../utils/rateLimit';
 
 const SETLISTFM_BASE = 'https://api.setlist.fm/rest/1.0';
 const MIN_INTERVAL_MS = 1100; // stay under setlist.fm's free non-commercial rate limit (~1 req/sec)
@@ -43,6 +45,8 @@ export async function GET(request) {
   if (!user) {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
   }
+  const limited = await rateLimit(createAdminClient(), 'setlistSearch', user.id);
+  if (limited) return limited;
 
   const { searchParams } = new URL(request.url);
   const artist = searchParams.get('artist')?.trim();
