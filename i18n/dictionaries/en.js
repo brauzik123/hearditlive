@@ -14,6 +14,7 @@ const en = {
     edit: 'Edit',
     loading: 'Loading',
     remove: 'Remove',
+    tooManyRequests: 'Too many requests. Try again in a minute.',
     unknownArtist: 'Unknown artist',
   },
   nav: {

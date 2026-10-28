@@ -16,6 +16,7 @@ const pl = {
     edit: 'Edytuj',
     loading: 'Ładowanie',
     remove: 'Usuń',
+    tooManyRequests: 'Za dużo zapytań. Spróbuj ponownie za minutę.',
     unknownArtist: 'Nieznany wykonawca',
   },
   nav: {
