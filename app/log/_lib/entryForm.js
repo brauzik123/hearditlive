@@ -249,3 +249,33 @@ export function copyFromFriend(friendForm, { sourceId, friend }) {
     copiedFrom: sourceId,
   };
 }
+
+// "Whose song" for one setlist line, as a choice in the form:
+//   'auto'          work it out (setlist.fm credit, else Spotify catalogs)
+//   'artist:<name>' one of the billed artists
+//   'guest'         the guest's own song
+//   'cover'         someone else's song (coverOriginalArtist says whose)
+export function ownerChoice(song) {
+  if (song.isCover) return 'cover';
+  if (!song.ownerName) return 'auto';
+  if (song.guestName && sameArtistName(song.ownerName, song.guestName)) return 'guest';
+  return `artist:${song.ownerName}`;
+}
+
+// The song fields to change when a choice is picked.
+export function applyOwnerChoice(song, choice) {
+  if (choice === 'cover') return { isCover: true, ownerName: null };
+  const plain = { isCover: false, coverOriginalArtist: null };
+  if (choice === 'guest') return { ...plain, ownerName: song.guestName?.trim() || null };
+  if (choice.startsWith('artist:')) return { ...plain, ownerName: choice.slice('artist:'.length) };
+  return { ...plain, ownerName: null };
+}
+
+// What to show next to a song: its owner, or "cover: X". Nothing when it's
+// worked out automatically or the guest row already says it.
+export function ownerLabel(song) {
+  const choice = ownerChoice(song);
+  if (choice === 'cover') return { cover: song.coverOriginalArtist?.trim() || null };
+  if (choice.startsWith('artist:')) return { artist: song.ownerName };
+  return null;
+}

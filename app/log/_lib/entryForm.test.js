@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyOwnerChoice,
   applySetlistfm,
   attendeeRows,
   billedNames,
   copyFromFriend,
+  ownerChoice,
+  ownerLabel,
   setlistArtistNames,
   emptyForm,
   entryPayload,
@@ -315,5 +318,40 @@ describe('friends at shows', () => {
     expect(mine.setlist.map((s) => s.name)).toEqual(theirs.setlist.map((s) => s.name));
     // New ids, so editing your copy never touches theirs.
     expect(mine.setlist[0].id).not.toBe(theirs.setlist[0].id);
+  });
+});
+
+describe('whose song, set by hand', () => {
+  const song = { name: 'Sexoholik', isCover: false, coverOriginalArtist: null, ownerName: null, guestName: 'Żabson' };
+
+  it('reads the current choice', () => {
+    expect(ownerChoice(song)).toBe('auto');
+    expect(ownerChoice({ ...song, ownerName: 'Żabson' })).toBe('guest');
+    expect(ownerChoice({ ...song, ownerName: 'Tezzus' })).toBe('artist:Tezzus');
+    expect(ownerChoice({ ...song, isCover: true, coverOriginalArtist: 'Radiohead' })).toBe('cover');
+  });
+
+  it('applies each choice', () => {
+    expect(applyOwnerChoice(song, 'guest')).toEqual({ isCover: false, coverOriginalArtist: null, ownerName: 'Żabson' });
+    expect(applyOwnerChoice(song, 'artist:diamond*')).toMatchObject({ ownerName: 'diamond*', isCover: false });
+    expect(applyOwnerChoice({ ...song, isCover: true, coverOriginalArtist: 'X' }, 'auto')).toEqual({
+      isCover: false,
+      coverOriginalArtist: null,
+      ownerName: null,
+    });
+    expect(applyOwnerChoice(song, 'cover')).toEqual({ isCover: true, ownerName: null });
+  });
+
+  it('round-trips: every choice reads back as itself', () => {
+    for (const choice of ['auto', 'guest', 'artist:Tezzus', 'cover']) {
+      expect(ownerChoice({ ...song, ...applyOwnerChoice(song, choice) })).toBe(choice);
+    }
+  });
+
+  it('labels owners and covers, and stays quiet otherwise', () => {
+    expect(ownerLabel({ ...song, ownerName: 'Tezzus' })).toEqual({ artist: 'Tezzus' });
+    expect(ownerLabel({ ...song, isCover: true, coverOriginalArtist: 'Radiohead' })).toEqual({ cover: 'Radiohead' });
+    expect(ownerLabel({ ...song, ownerName: 'Żabson' })).toBeNull();
+    expect(ownerLabel(song)).toBeNull();
   });
 });
