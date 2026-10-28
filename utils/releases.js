@@ -104,3 +104,17 @@ export function buildCatalog(releases, tracklists, spotifyId) {
   });
   return { albums, songs };
 }
+
+// Spotify's spelling of an artist name ("BTS", "J. Cole"), but only when it's
+// the same name as typed apart from capitals and spacing — never a
+// different name, so a wrong Spotify match can't rename an artist.
+export function officialSpelling(typed, spotifyName) {
+  const simplify = (s) => (s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!spotifyName || spotifyName === typed) return null;
+  return simplify(typed) === simplify(spotifyName) ? spotifyName : null;
+}
+
+// The artist's own name as Spotify credits it on their releases.
+export function creditedName(releases, spotifyId) {
+  return releases.find((r) => isOwnRelease(r, spotifyId))?.artists[0].name ?? null;
+}

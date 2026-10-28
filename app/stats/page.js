@@ -6,6 +6,7 @@ import { cityName } from '../../utils/placeNames';
 import { countOutings, topByOutings } from '../../utils/outings';
 import { fetchAllIn } from '../../utils/fetchAll';
 import { checked } from '../../utils/checked';
+import { billing, LINEUP_SIZE, rankArtists } from '../../utils/lineup';
 
 function topCounts(items, keyFn, limit) {
   const counts = new Map();
@@ -20,25 +21,14 @@ function topCounts(items, keyFn, limit) {
     .slice(0, limit);
 }
 
-// Billing tiers, like a festival poster: one headliner, then smaller type
-// for each row further down the bill.
-const TIERS = [
-  { size: 1, className: 'text-6xl md:text-8xl text-brand' },
-  { size: 3, className: 'text-4xl md:text-5xl' },
-  { size: 5, className: 'text-2xl md:text-3xl' },
-  { size: 8, className: 'text-xl text-muted' },
+// Type size per poster row (see utils/lineup.js): one headliner, then
+// smaller type for each row further down the bill.
+const TIER_CLASSES = [
+  'text-6xl md:text-8xl text-brand',
+  'text-4xl md:text-5xl',
+  'text-2xl md:text-3xl',
+  'text-xl text-muted',
 ];
-
-function billing(artists) {
-  const rows = [];
-  let start = 0;
-  for (const tier of TIERS) {
-    const slice = artists.slice(start, start + tier.size);
-    if (slice.length) rows.push({ ...tier, artists: slice });
-    start += tier.size;
-  }
-  return rows;
-}
 
 export default async function Stats() {
   const supabase = await createClient();
@@ -49,27 +39,31 @@ export default async function Stats() {
 
   const { data: attended } = checked(await supabase
     .from('concert_entries')
-    .select('id, festival_id, event_date, venue_id, artists(name), festivals(name), venues(name, city, city_id, cities(name_en, name_pl))')
+    .select('id, artist_id, is_support, festival_id, event_date, venue_id, artists(name), festivals(name), venues(name, city, city_id, cities(name_en, name_pl))')
     .eq('user_id', user.id)
     .eq('entry_type', 'attended'));
 
   const entries = attended ?? [];
   const entryIds = entries.map((e) => e.id);
-  const setlistRows = await fetchAllIn(() => supabase.from('entry_setlist').select('song_name'), 'entry_id', entryIds);
+  const setlistRows = await fetchAllIn(() => supabase.from('entry_setlist').select('entry_id, song_name'), 'entry_id', entryIds);
 
   // Cities and venues are counted by identity (a linked GeoNames city, a
   // venue row), so "Warsaw" and "Warszawa" are one city; festivals count
   // once per year (see utils/outings.js).
+  const songCountByEntry = new Map();
+  for (const row of setlistRows) songCountByEntry.set(row.entry_id, (songCountByEntry.get(row.entry_id) ?? 0) + 1);
+  const ranked = rankArtists(entries, songCountByEntry);
+
   const cityKey = (e) => (e.venues?.city_id ? `id:${e.venues.city_id}` : e.venues?.city?.trim().toLowerCase() || null);
   const summary = [
     { value: countOutings(entries), key: 'stats.eventsLabel' },
     { value: entries.length, key: 'stats.showsLabel' },
-    { value: new Set(entries.map((e) => e.artists?.name).filter(Boolean)).size, key: 'stats.artistsLabel' },
+    { value: ranked.length, key: 'stats.artistsLabel' },
     { value: (setlistRows ?? []).length, key: 'stats.songsLabel' },
     { value: new Set(entries.map(cityKey).filter(Boolean)).size, key: 'stats.citiesLabel' },
   ].map((s) => ({ ...s, label: t(s.key, { count: s.value }) }));
 
-  const lineup = billing(topCounts(entries, (e) => e.artists?.name, 17));
+  const lineup = billing(ranked.slice(0, LINEUP_SIZE));
   const topSongs = topCounts(setlistRows ?? [], (s) => s.song_name, 10);
   const topVenues = topByOutings(
     entries,
@@ -105,9 +99,9 @@ export default async function Stats() {
         ) : (
           <div className="flex flex-col items-center gap-3">
             {lineup.map((row) => (
-              <p key={row.size} className={`marquee flex flex-wrap justify-center gap-x-5 gap-y-1 ${row.className}`}>
+              <p key={row.tier} className={`marquee flex flex-wrap justify-center gap-x-5 gap-y-1 ${TIER_CLASSES[row.tier]}`}>
                 {row.artists.map((a) => (
-                  <span key={a.name} title={t('stats.seenTimes', { count: a.count })}>
+                  <span key={a.name} title={t('stats.seenTimes', { count: a.shows })}>
                     {a.name}
                   </span>
                 ))}

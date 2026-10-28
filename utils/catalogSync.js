@@ -10,7 +10,7 @@ import {
 } from './spotify';
 import { normalizeSongName } from './normalize';
 import { fetchAll } from './fetchAll';
-import { buildCatalog, orderReleases, pickEditions } from './releases';
+import { buildCatalog, creditedName, officialSpelling, orderReleases, pickEditions } from './releases';
 import { findArtistMbid, getBandMemberships } from './musicbrainz';
 
 export { normalizeSongName };
@@ -99,7 +99,12 @@ async function syncCatalog(supabase, artist) {
     p_songs: songs,
   });
   if (error) throw new Error(`Catalog save failed: ${error.message}`);
-  return { ...resolved, catalog_synced_at: new Date().toISOString() };
+
+  // "bts" as typed becomes "BTS" as Spotify credits it (spelling only).
+  const official = officialSpelling(resolved.name, creditedName(all, resolved.spotify_id));
+  if (official) await supabase.from('artists').update({ name: official }).eq('id', artist.id);
+
+  return { ...resolved, ...(official ? { name: official } : {}), catalog_synced_at: new Date().toISOString() };
 }
 
 // Heard songs that didn't match the artist's own releases by name: a

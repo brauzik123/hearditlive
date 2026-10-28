@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { buildCatalog, editionKey, isOwnRelease, orderReleases, pickEditions, toDate } from './releases';
+import {
+  buildCatalog,
+  creditedName,
+  editionKey,
+  isOwnRelease,
+  officialSpelling,
+  orderReleases,
+  pickEditions,
+  toDate,
+} from './releases';
 
 const QUAVO = 'quavo-id';
 
@@ -143,5 +152,34 @@ describe('buildCatalog', () => {
     );
     expect(songs).toHaveLength(1);
     expect(songs[0].spotify_album_id).toBe('orig');
+  });
+});
+
+describe('officialSpelling', () => {
+  it("adopts Spotify's capitals and spacing", () => {
+    expect(officialSpelling('bts', 'BTS')).toBe('BTS');
+    expect(officialSpelling('J. cole', 'J. Cole')).toBe('J. Cole');
+    expect(officialSpelling('justin  bieber ', 'Justin Bieber')).toBe('Justin Bieber');
+  });
+
+  it('never swaps in a different name', () => {
+    expect(officialSpelling('Kinny Zimmer', 'Kinny Zimmer Band')).toBeNull();
+    expect(officialSpelling('slayr', 'Slayer')).toBeNull();
+  });
+
+  it('does nothing when the spelling already matches', () => {
+    expect(officialSpelling('Quavo', 'Quavo')).toBeNull();
+    expect(officialSpelling('Quavo', null)).toBeNull();
+  });
+});
+
+describe('creditedName', () => {
+  it("takes the name from the artist's own release, not a feature", () => {
+    const feature = release({ id: 'f', name: 'Remix', artist: ['post'] });
+    feature.artists[0].name = 'Post Malone';
+    const own = release({ id: 'o', name: 'Album' });
+    own.artists[0].name = 'Quavo';
+    expect(creditedName([feature, own], QUAVO)).toBe('Quavo');
+    expect(creditedName([feature], QUAVO)).toBeNull();
   });
 });
