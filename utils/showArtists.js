@@ -42,14 +42,22 @@ export function splitJointAct(actName, songOwnerNames) {
 
 // Whether a heard song counts for `artistId` at a show billed to `billedIds`
 // (first-billed first). `ownerId` is the song's known owner (setlist.fm
-// credit), `inCatalog(artistId)` says whether it's on that artist's
-// releases. On a joint show a song goes to its owner, else to whichever
-// billed artist has it, else (nobody's catalog) to the first-billed only —
-// so nothing is counted twice by accident.
-export function songCountsFor({ ownerId, inCatalog }, artistId, billedIds) {
+// credit), `guestId` a guest who joined for it, and `inCatalog(artistId)`
+// says whether it's on that artist's releases (features included).
+//
+// A song goes to its owner when known. Otherwise each billed artist gets the
+// songs on their own releases; a guest gets the song if it's theirs or they
+// feature on it (Żabson coming out for his own "Sexoholik", or for the
+// track he's on). A song nobody's catalog knows goes to the first-billed
+// only, so nothing is counted twice by accident.
+export function songCountsFor({ ownerId = null, guestId = null, inCatalog }, artistId, billedIds) {
+  if (guestId && artistId === guestId) return ownerId === guestId || inCatalog(guestId);
   if (ownerId) return ownerId === artistId;
-  if (billedIds.length <= 1) return true;
+  if (!billedIds.includes(artistId)) return false;
+  const others = billedIds.filter((id) => id !== artistId);
+  if (guestId && !billedIds.includes(guestId)) others.push(guestId);
+  if (!others.length) return true;
   if (inCatalog(artistId)) return true;
-  if (billedIds.some((id) => id !== artistId && inCatalog(id))) return false;
+  if (others.some((id) => inCatalog(id))) return false;
   return artistId === billedIds[0];
 }

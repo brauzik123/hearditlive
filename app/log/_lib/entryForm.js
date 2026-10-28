@@ -40,7 +40,8 @@ export const emptyForm = {
 // Columns and relations entryToForm needs.
 export const ENTRY_FORM_SELECT = `*, artists(name), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, setlistfm_id, cities(name_en, name_pl)), festivals(name),
   entry_photos(id, url, caption, position, is_cover),
-  entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist, artist_id),
+  entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist, artist_id, guest_artist_id,
+    owner:artists!entry_setlist_artist_id_fkey(name), guest:artists!entry_setlist_guest_artist_id_fkey(name)),
   entry_attendees(guest_name),
   entry_tags(tags(name))`;
 
@@ -90,7 +91,8 @@ export function entryToForm(entry, { locale, went = false }) {
         isEncore: !!s.is_encore,
         isCover: !!s.is_cover,
         coverOriginalArtist: s.cover_original_artist ?? null,
-        ownerName: s.artist_id ? nameOf(s.artist_id) : null,
+        ownerName: s.owner?.name ?? (s.artist_id ? nameOf(s.artist_id) : null),
+        guestName: s.guest?.name ?? null,
       })),
     attendees: (entry.entry_attendees ?? []).map((a) => a.guest_name).filter(Boolean),
     tags: (entry.entry_tags ?? []).map((tag) => tag.tags?.name).filter(Boolean),
@@ -115,7 +117,10 @@ export function applySetlistfm(form, setlist) {
 
   const songs = setlist.sets.flatMap((set) =>
     set.songs.map((song) => {
-      const owner = billed.length > 1 ? billedMatch(song.coverOriginalArtist) : null;
+      const guest = song.withArtist ?? null;
+      // A guest playing their own song: it's theirs, not a cover.
+      const guestsOwn = guest && sameArtistName(song.coverOriginalArtist, guest) ? guest : null;
+      const owner = (billed.length > 1 ? billedMatch(song.coverOriginalArtist) : null) ?? guestsOwn;
       return {
         id: newId(),
         name: song.name,
@@ -123,6 +128,7 @@ export function applySetlistfm(form, setlist) {
         isCover: song.isCover && !owner,
         coverOriginalArtist: owner ? null : song.coverOriginalArtist,
         ownerName: owner,
+        guestName: guest,
       };
     })
   );
@@ -162,6 +168,18 @@ export function entryPayload(form, { userId, artistId, venueId, festivalId }) {
   };
 }
 
+// Artists named on setlist lines (owners and guests) who aren't billed.
+export function setlistArtistNames(form) {
+  const billed = billedNames(form);
+  const names = [];
+  for (const song of form.setlist) {
+    for (const name of [song.ownerName, song.guestName].map((n) => n?.trim()).filter(Boolean)) {
+      if (![...billed, ...names].some((n) => sameArtistName(n, name))) names.push(name);
+    }
+  }
+  return names;
+}
+
 // The show's billed artist names, first-billed first, blanks and repeats dropped.
 export function billedNames(form) {
   const names = [];
@@ -177,7 +195,7 @@ export function photosInSaveOrder(form) {
 }
 
 // entry_setlist rows; blank song lines are dropped. artistIdFor(name) maps a
-// song's owner (one of the billed artists) to its id.
+// song's owner or guest to the artist's id.
 export function setlistRows(form, entryId, artistIdFor = () => null) {
   return form.setlist
     .filter((s) => s.name.trim())
@@ -189,5 +207,6 @@ export function setlistRows(form, entryId, artistIdFor = () => null) {
       is_cover: !!s.isCover,
       cover_original_artist: s.coverOriginalArtist || null,
       artist_id: s.ownerName ? artistIdFor(s.ownerName) : null,
+      guest_artist_id: s.guestName?.trim() ? artistIdFor(s.guestName.trim()) : null,
     }));
 }

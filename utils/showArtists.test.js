@@ -82,3 +82,42 @@ describe('songCountsFor', () => {
     expect(songCountsFor(song('anything'), 'bts', ['bts'])).toBe(true);
   });
 });
+
+describe('songCountsFor with a guest', () => {
+  // Tezzus & diamond*, with Żabson coming out.
+  const billed = ['tezzus', 'diamond'];
+  const catalogs = {
+    tezzus: new Set(['aubrey', 'feature track']),
+    diamond: new Set(['3 phones']),
+    zabson: new Set(['sexoholik', 'feature track']),
+  };
+  const song = (key, extra = {}) => ({ guestId: 'zabson', inCatalog: (id) => catalogs[id]?.has(key) ?? false, ...extra });
+  const countsFor = (s) => [...billed, 'zabson'].filter((id) => songCountsFor(s, id, billed));
+
+  it("gives the guest's own song to the guest only", () => {
+    expect(countsFor(song('sexoholik'))).toEqual(['zabson']);
+    expect(countsFor(song('sexoholik', { ownerId: 'zabson' }))).toEqual(['zabson']);
+  });
+
+  it('gives a song the guest features on to the headliner and the guest', () => {
+    expect(countsFor(song('feature track'))).toEqual(['tezzus', 'zabson']);
+  });
+
+  it('still credits the guest when setlist.fm credits the song to the headliner', () => {
+    expect(countsFor(song('feature track', { ownerId: 'tezzus' }))).toEqual(['tezzus', 'zabson']);
+  });
+
+  it("doesn't give the guest songs they weren't part of", () => {
+    expect(countsFor({ inCatalog: (id) => catalogs[id]?.has('aubrey') ?? false })).toEqual(['tezzus']);
+  });
+
+  it("keeps an unknown song with the first-billed artist, not the guest", () => {
+    expect(countsFor(song('unreleased'))).toEqual(['tezzus']);
+  });
+
+  it('works on a one-artist show too', () => {
+    const solo = ['tezzus'];
+    expect(songCountsFor(song('sexoholik'), 'tezzus', solo)).toBe(false);
+    expect(songCountsFor(song('aubrey'), 'tezzus', solo)).toBe(true);
+  });
+});

@@ -27,7 +27,8 @@ export default async function EntryDetail({ params }) {
     .select(
       `*, artists(name), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, cities(name_en, name_pl)), festivals(name),
        entry_photos(id, url, caption, position),
-       entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist, artist_id),
+       entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist, artist_id,
+         guest:artists!entry_setlist_guest_artist_id_fkey(name)),
        entry_attendees(guest_name),
        entry_tags(tags(name)),
        profiles!concert_entries_user_id_fkey(username, avatar_url, default_entry_visibility, profile_visibility)`
@@ -62,6 +63,8 @@ export default async function EntryDetail({ params }) {
   const encore = setlist.filter((s) => s.is_encore);
   // On a joint show, each song says whose it is (when known).
   const billed = billedArtists(entry);
+  // Guests who came on stage, in setlist order.
+  const guests = [...new Set(setlist.map((s) => s.guest?.name).filter(Boolean))];
   const songOwner = (song) => (billed.length > 1 ? billed.find((a) => a.id === song.artist_id)?.name : null);
   const attendees = (entry.entry_attendees ?? []).map((a) => a.guest_name).filter(Boolean);
   const tags = (entry.entry_tags ?? []).map((tag) => tag.tags?.name).filter(Boolean);
@@ -100,6 +103,7 @@ export default async function EntryDetail({ params }) {
             </Link>
           )}
           {entry.tour_name && <span>{entry.tour_name}</span>}
+          {guests.length > 0 && <span>{t('entry.guests', { names: guests.join(', ') })}</span>}
           {entry.is_favorite && (
             <span className="flex items-center gap-1 text-brand">
               <Heart size={13} className="fill-brand" /> {t('entry.favorite')}
@@ -213,6 +217,7 @@ function SetlistRow({ number, song, owner, t }) {
       <span className="flex-1">
         {song.song_name}
         {owner && <span className="ml-2 text-xs text-muted">{owner}</span>}
+        {song.guest?.name && <span className="ml-2 text-xs text-brand">{t('entry.withGuest', { name: song.guest.name })}</span>}
         {song.is_cover && (
           <span className="ml-2 text-xs text-muted">
             {song.cover_original_artist ? t('entry.coverOf', { artist: song.cover_original_artist }) : t('entry.cover')}

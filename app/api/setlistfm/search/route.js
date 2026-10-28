@@ -90,6 +90,8 @@ export async function GET(request) {
         name: song.name,
         isCover: !!song.cover,
         coverOriginalArtist: song.cover?.name ?? null,
+        // A guest who joined for this song.
+        withArtist: song.with?.name ?? null,
       })),
     })),
   }));

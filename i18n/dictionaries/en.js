@@ -98,6 +98,8 @@ const en = {
     noMatches: 'No shows match these filters.',
   },
   entry: {
+    guests: 'Guests: {names}',
+    withGuest: 'with {name}',
     backToCollection: 'Collection',
     backToProfile: '{name}’s profile',
     atFestival: 'At {name}',
@@ -119,6 +121,10 @@ const en = {
     },
   },
   log: {
+    addGuest: 'Add a guest who joined for this song',
+    guest: 'Guest on this song',
+    guestPlaceholder: 'Guest, e.g. Żabson',
+    removeGuest: 'Remove the guest',
     addCoArtist: 'Add another artist (joint show)',
     coArtist: 'Another billed artist',
     coArtistPlaceholder: 'e.g. Young Igi',
@@ -303,6 +309,8 @@ const en = {
     deleteFailed: 'The account couldn’t be deleted. Try again.',
   },
   songs: {
+    asGuest: 'as a guest',
+    asGuestHint: "Heard when they joined someone else's show as a guest",
     title: 'Songs',
     titleOf: '{name}’s songs',
     subtitle: 'Every artist you’ve heard live, and how much of their music you’ve heard.',

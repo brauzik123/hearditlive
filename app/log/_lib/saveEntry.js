@@ -1,6 +1,6 @@
 import { newId } from '../../../utils/id';
 import { sameArtistName } from '../../../utils/normalize';
-import { billedNames, entryPayload, exact, photosInSaveOrder, setlistRows } from './entryForm';
+import { billedNames, entryPayload, exact, photosInSaveOrder, setlistArtistNames, setlistRows } from './entryForm';
 
 // Writes a log entry (new or edited) and everything attached to it.
 // Returns the entry id.
@@ -128,7 +128,10 @@ export async function saveEntry(supabase, { form, editId }) {
     if (coError) throw coError;
   }
 
-  const artistIdFor = (name) => billed.find((a) => sameArtistName(a.name, name))?.id ?? null;
+  // Guests (and guests' own songs) name artists who aren't billed.
+  const named = [...billed];
+  for (const name of setlistArtistNames(form)) named.push({ name, id: await resolveArtist(supabase, name) });
+  const artistIdFor = (name) => named.find((a) => sameArtistName(a.name, name))?.id ?? null;
   const songs = setlistRows(form, entryId, artistIdFor);
   if (songs.length) {
     const { error: setlistError } = await supabase.from('entry_setlist').insert(songs);

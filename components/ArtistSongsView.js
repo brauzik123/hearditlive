@@ -85,6 +85,11 @@ function SongRow({ song, number, showOthersToggle, artistId }) {
         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${song.heard !== false ? 'bg-brand' : 'border border-border'}`} />
       )}
       <span className={`flex-1 truncate ${song.heard === false || excluded ? 'text-muted' : ''}`}>{song.name}</span>
+      {song.asGuest && (
+        <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] text-muted" title={t('songs.asGuestHint')}>
+          {t('songs.asGuest')}
+        </span>
+      )}
       {song.count > 0 && (
         <span className="shrink-0 text-sm text-muted">{t('songs.timesHeard', { count: song.count })}</span>
       )}

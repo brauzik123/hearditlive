@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applySetlistfm,
   billedNames,
+  setlistArtistNames,
   emptyForm,
   entryPayload,
   entryToForm,
@@ -149,8 +150,8 @@ describe('saving', () => {
   it('drops blank songs and numbers the rest in order', () => {
     const form = { ...emptyForm, setlist: [{ name: ' One ' }, { name: '  ' }, { name: 'Two', isEncore: true }] };
     expect(setlistRows(form, 'e1')).toEqual([
-      { entry_id: 'e1', song_name: 'One', position: 0, is_encore: false, is_cover: false, cover_original_artist: null, artist_id: null },
-      { entry_id: 'e1', song_name: 'Two', position: 1, is_encore: true, is_cover: false, cover_original_artist: null, artist_id: null },
+      { entry_id: 'e1', song_name: 'One', position: 0, is_encore: false, is_cover: false, cover_original_artist: null, artist_id: null, guest_artist_id: null },
+      { entry_id: 'e1', song_name: 'Two', position: 1, is_encore: true, is_cover: false, cover_original_artist: null, artist_id: null, guest_artist_id: null },
     ]);
   });
 });
@@ -177,7 +178,7 @@ describe('joint shows', () => {
         songs: [
           { name: '3 PhØnes', isCover: true, coverOriginalArtist: 'diamond*' },
           { name: 'Aubrey', isCover: true, coverOriginalArtist: 'Tezzus' },
-          { name: 'Sexoholik', isCover: true, coverOriginalArtist: 'Żabson' },
+          { name: 'Sexoholik', isCover: true, coverOriginalArtist: 'Żabson', withArtist: 'Żabson' },
         ],
       },
     ],
@@ -187,10 +188,11 @@ describe('joint shows', () => {
     const patch = applySetlistfm({ ...emptyForm, artist: 'Tezzus' }, tezzus);
     expect(patch.artist).toBe('Tezzus');
     expect(patch.coArtists).toEqual(['diamond*']);
-    expect(patch.setlist.map(({ name, isCover, ownerName }) => [name, isCover, ownerName])).toEqual([
-      ['3 PhØnes', false, 'diamond*'],
-      ['Aubrey', false, 'Tezzus'],
-      ['Sexoholik', true, null],
+    expect(patch.setlist.map(({ name, isCover, ownerName, guestName }) => [name, isCover, ownerName, guestName])).toEqual([
+      ['3 PhØnes', false, 'diamond*', null],
+      ['Aubrey', false, 'Tezzus', null],
+      // Żabson came out for his own song: a guest spot, not a cover.
+      ['Sexoholik', false, 'Żabson', 'Żabson'],
     ]);
   });
 
@@ -225,5 +227,41 @@ describe('joint shows', () => {
     expect(billedNames(form)).toEqual(['Żabson', 'Young Igi']);
     const ids = { 'Young Igi': 'i' };
     expect(setlistRows(form, 'e1', (name) => ids[name] ?? null)[0].artist_id).toBe('i');
+  });
+});
+
+describe('guests', () => {
+  it('keeps a real cover a cover, even with a guest on it', () => {
+    const patch = applySetlistfm(emptyForm, {
+      id: 'x',
+      url: 'u',
+      eventDate: '01-01-2026',
+      sets: [{ isEncore: false, songs: [{ name: 'Creep', isCover: true, coverOriginalArtist: 'Radiohead', withArtist: 'Żabson' }] }],
+    });
+    expect(patch.setlist[0]).toMatchObject({ isCover: true, coverOriginalArtist: 'Radiohead', ownerName: null, guestName: 'Żabson' });
+  });
+
+  it('saves the guest, resolving artists who are not billed', () => {
+    const form = {
+      ...emptyForm,
+      artist: 'Tezzus',
+      coArtists: ['diamond*'],
+      setlist: [{ name: 'Sexoholik', ownerName: 'Żabson', guestName: 'Żabson' }, { name: 'Aubrey', ownerName: 'Tezzus', guestName: '' }],
+    };
+    expect(setlistArtistNames(form)).toEqual(['Żabson']);
+    const ids = { Żabson: 'z', Tezzus: 't' };
+    const rows = setlistRows(form, 'e1', (name) => ids[name] ?? null);
+    expect(rows.map((r) => [r.artist_id, r.guest_artist_id])).toEqual([
+      ['z', 'z'],
+      ['t', null],
+    ]);
+  });
+
+  it('loads guests back for editing', () => {
+    const form = entryToForm(
+      { ...savedEntry, entry_setlist: [{ song_name: 'Sexoholik', position: 0, artist_id: 'z', owner: { name: 'Żabson' }, guest: { name: 'Żabson' } }] },
+      { locale: 'en' }
+    );
+    expect(form.setlist[0]).toMatchObject({ ownerName: 'Żabson', guestName: 'Żabson' });
   });
 });

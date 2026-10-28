@@ -13,6 +13,7 @@ import { songCountsFor } from './showArtists';
 // solo song of one doesn't land on the other's page, and totals elsewhere
 // (Stats) never double.
 const ENTRY_ARTISTS = 'id, artist_id, entry_co_artists(artist_id, position)';
+const ROW_FIELDS = 'entry_id, song_name, artist_id, guest_artist_id';
 
 function billedIdsOf(entry) {
   const rest = [...(entry.entry_co_artists ?? [])].sort((a, b) => a.position - b.position).map((c) => c.artist_id);
@@ -44,7 +45,7 @@ async function catalogKeys(supabase, artistIds) {
 function creditedTo(row, artistId, billedIds, anyKeys) {
   const key = normalizeSongName(row.song_name);
   return songCountsFor(
-    { ownerId: row.artist_id, inCatalog: (id) => anyKeys.get(id)?.has(key) ?? false },
+    { ownerId: row.artist_id, guestId: row.guest_artist_id, inCatalog: (id) => anyKeys.get(id)?.has(key) ?? false },
     artistId,
     billedIds
   );
@@ -57,18 +58,29 @@ export async function creditedSetlistRows(supabase, userId, artistId) {
   const all = await fetchAll(() =>
     supabase.from('concert_entries').select(ENTRY_ARTISTS).eq('user_id', userId).eq('entry_type', 'attended')
   );
-  const entries = all.filter((e) => billedIdsOf(e).includes(artistId));
-  const billedByEntry = new Map(entries.map((e) => [e.id, billedIdsOf(e)]));
-  const rows = await fetchAllIn(
-    () => supabase.from('entry_setlist').select('entry_id, song_name, artist_id'),
-    'entry_id',
-    entries.map((e) => e.id)
-  );
-  const coArtists = [...new Set(entries.flatMap(billedIdsOf))];
-  const { any } = coArtists.length > 1 ? await catalogKeys(supabase, coArtists) : { any: new Map() };
+  const billedByEntry = new Map(all.map((e) => [e.id, billedIdsOf(e)]));
+  const billedEntryIds = all.filter((e) => billedByEntry.get(e.id).includes(artistId)).map((e) => e.id);
+  const otherEntryIds = all.filter((e) => !billedByEntry.get(e.id).includes(artistId)).map((e) => e.id);
+  const [billedRows, guestRows] = await Promise.all([
+    fetchAllIn(() => supabase.from('entry_setlist').select(ROW_FIELDS), 'entry_id', billedEntryIds),
+    // Songs they joined as a guest at other people's shows.
+    fetchAllIn(
+      () => supabase.from('entry_setlist').select(ROW_FIELDS).eq('guest_artist_id', artistId),
+      'entry_id',
+      otherEntryIds
+    ),
+  ]);
+  const rows = [...billedRows, ...guestRows];
+  const involved = [
+    ...new Set(rows.flatMap((row) => [...billedByEntry.get(row.entry_id), row.guest_artist_id]).filter(Boolean)),
+  ];
+  const { any } = involved.length > 1 ? await catalogKeys(supabase, involved) : { any: new Map() };
+  const credited = rows
+    .filter((row) => creditedTo(row, artistId, billedByEntry.get(row.entry_id), any))
+    .map((row) => ({ ...row, asGuest: !billedByEntry.get(row.entry_id).includes(artistId) }));
   return {
-    entryCount: entries.length,
-    rows: rows.filter((row) => creditedTo(row, artistId, billedByEntry.get(row.entry_id), any)),
+    entryCount: new Set([...billedEntryIds, ...credited.map((row) => row.entry_id)]).size,
+    rows: credited,
   };
 }
 
@@ -94,10 +106,19 @@ export async function getSongsOverview(supabase, userId) {
   });
 
   const setlistRows = await fetchAllIn(
-    () => supabase.from('entry_setlist').select('entry_id, song_name, artist_id'),
+    () => supabase.from('entry_setlist').select(ROW_FIELDS),
     'entry_id',
     entries.map((e) => e.id)
   );
+
+  // Guests heard at your shows count as artists you've heard live too.
+  const guestIds = [...new Set(setlistRows.map((r) => r.guest_artist_id).filter((id) => id && !artistsById.has(id)))];
+  if (guestIds.length) {
+    const { data: guests } = checked(
+      await supabase.from('artists').select('id, name, image_url, catalog_synced_at').in('id', guestIds)
+    );
+    (guests ?? []).forEach((g) => artistsById.set(g.id, g));
+  }
 
   const { data: exclusionRows } = checked(
     await supabase.from('song_count_exclusions').select('artist_id, song_name').eq('user_id', userId)
@@ -110,7 +131,8 @@ export async function getSongsOverview(supabase, userId) {
   const namesByArtist = new Map();
   setlistRows.forEach((row) => {
     const billed = billedByEntry.get(row.entry_id) ?? [];
-    for (const artistId of billed) {
+    const candidates = row.guest_artist_id && !billed.includes(row.guest_artist_id) ? [...billed, row.guest_artist_id] : billed;
+    for (const artistId of candidates) {
       if (excluded.has(`${artistId}::${row.song_name}`) || !creditedTo(row, artistId, billed, any)) continue;
       if (!namesByArtist.has(artistId)) namesByArtist.set(artistId, []);
       namesByArtist.get(artistId).push(row.song_name);
@@ -165,11 +187,15 @@ export async function getArtistSongs(supabase, userId, artistId) {
   const excludedNames = new Set((exclusionRows ?? []).map((r) => r.song_name));
 
   const heardNamesRaw = (setlistRows ?? []).map((r) => r.song_name);
-  const heardCounts = new Map(); // normalized -> { count, rawName, excluded }
-  heardNamesRaw.forEach((raw) => {
+  // normalized -> { count, rawName, excluded, asGuest (only ever heard as a guest) }
+  const heardCounts = new Map();
+  setlistRows.forEach((row) => {
+    const raw = row.song_name;
     const key = normalizeSongName(raw);
-    if (!heardCounts.has(key)) heardCounts.set(key, { count: 0, rawName: raw, excluded: excludedNames.has(raw) });
-    heardCounts.get(key).count += 1;
+    if (!heardCounts.has(key)) heardCounts.set(key, { count: 0, rawName: raw, excluded: excludedNames.has(raw), asGuest: true });
+    const heard = heardCounts.get(key);
+    heard.count += 1;
+    if (!row.asGuest) heard.asGuest = false;
   });
 
   // No blocking sync here — ArtistSongsView kicks off the sync (+ per-song
@@ -193,6 +219,7 @@ export async function getArtistSongs(supabase, userId, artistId) {
       name: song.name,
       heard: !!heard,
       count: heard?.count ?? 0,
+      asGuest: !!heard?.asGuest,
       trackNumber: song.track_number,
     };
     // Only songs placed in a real bucket count as matched. Rows the sync
@@ -247,7 +274,7 @@ export async function getArtistSongs(supabase, userId, artistId) {
 
   const others = Array.from(heardCounts.entries())
     .filter(([key]) => !matchedNormalized.has(key))
-    .map(([, v]) => ({ name: v.rawName, count: v.count, excluded: v.excluded }));
+    .map(([, v]) => ({ name: v.rawName, count: v.count, excluded: v.excluded, asGuest: v.asGuest }));
 
   const albums = (albumRows ?? []).map((album) => ({
     id: album.id,

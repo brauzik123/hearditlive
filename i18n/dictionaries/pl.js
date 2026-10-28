@@ -105,6 +105,8 @@ const pl = {
     noMatches: 'Żaden koncert nie pasuje do filtrów.',
   },
   entry: {
+    guests: 'Goście: {names}',
+    withGuest: 'gościnnie: {name}',
     backToCollection: 'Kolekcja',
     backToProfile: 'Profil {name}',
     atFestival: 'Festiwal: {name}',
@@ -126,6 +128,10 @@ const pl = {
     },
   },
   log: {
+    addGuest: 'Dodaj gościa w tym utworze',
+    guest: 'Gość w tym utworze',
+    guestPlaceholder: 'Gość, np. Żabson',
+    removeGuest: 'Usuń gościa',
     addCoArtist: 'Dodaj kolejnego wykonawcę (wspólny koncert)',
     coArtist: 'Kolejny wykonawca',
     coArtistPlaceholder: 'np. Young Igi',
@@ -310,6 +316,8 @@ const pl = {
     deleteFailed: 'Nie udało się usunąć konta. Spróbuj ponownie.',
   },
   songs: {
+    asGuest: 'gościnnie',
+    asGuestHint: 'Usłyszane podczas gościnnego występu na cudzym koncercie',
     title: 'Piosenki',
     titleOf: 'Piosenki: {name}',
     subtitle: 'Wszyscy wykonawcy usłyszani na żywo i to, jaką część ich muzyki już znasz z koncertów.',
