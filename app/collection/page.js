@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Search, List, Image as ImageIcon, Star, Loader2, Music2, ChevronDown, Check } from 'lucide-react';
+import { Search, List, Image as ImageIcon, Star, Loader2, Music2, ChevronDown, Check, RotateCw } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
 import { useI18n } from '../../i18n/client';
 import TicketStub from '../../components/TicketStub';
 import { formatRating } from '../../utils/rating';
 import { billedName } from '../../utils/showArtists';
+import ErrorScreen from '../../components/ErrorScreen';
 import { cityName } from '../../utils/placeNames';
 
 const SORTS = ['date_desc', 'date_asc', 'rating_desc', 'artist_asc'];
@@ -28,6 +29,7 @@ export default function Collection() {
   const { t, date, locale } = useI18n();
   const [view, setView] = useState('photos');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [entries, setEntries] = useState([]);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState('date_desc');
@@ -67,7 +69,10 @@ export default function Collection() {
         .eq('user_id', user.id)
         .eq('entry_type', 'attended');
 
+      // A failed load must not look like an empty collection.
       if (error) {
+        console.error('collection load failed:', error.message);
+        setLoadError(error.message);
         setLoading(false);
         return;
       }
@@ -136,6 +141,19 @@ export default function Collection() {
     () => [...new Set(entries.map((e) => e.festivals?.name).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [entries]
   );
+
+  if (loadError) {
+    return (
+      <ErrorScreen big=":(" title={t('errors.errorTitle')} body={t('errors.errorBody')}>
+        <button
+          onClick={() => window.location.reload()}
+          className="flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-brand-foreground transition hover:brightness-105"
+        >
+          <RotateCw size={15} /> {t('errors.retry')}
+        </button>
+      </ErrorScreen>
+    );
+  }
 
   if (loading) {
     return (
