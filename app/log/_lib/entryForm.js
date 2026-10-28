@@ -1,5 +1,7 @@
 import { newId } from '../../../utils/id';
 import { cityName } from '../../../utils/placeNames';
+import { sameArtistName } from '../../../utils/normalize';
+import { billedArtists, splitJointAct } from '../../../utils/showArtists';
 
 // The log form's state and how it maps to and from the database. No React
 // and no network here, so it's all unit-tested (entryForm.test.js).
@@ -11,6 +13,7 @@ export const TICKET_STATUSES = ['bought', 'not_yet', 'interested'];
 export const emptyForm = {
   entryType: 'attended',
   artist: '',
+  coArtists: [], // other billed artists of a joint show, in order
   venue: '',
   city: '',
   cityGeonameId: null, // GeoNames id once a city is picked or imported
@@ -35,9 +38,9 @@ export const emptyForm = {
 };
 
 // Columns and relations entryToForm needs.
-export const ENTRY_FORM_SELECT = `*, artists(name), venues(name, city, city_id, setlistfm_id, cities(name_en, name_pl)), festivals(name),
+export const ENTRY_FORM_SELECT = `*, artists(name), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, setlistfm_id, cities(name_en, name_pl)), festivals(name),
   entry_photos(id, url, caption, position, is_cover),
-  entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist),
+  entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist, artist_id),
   entry_attendees(guest_name),
   entry_tags(tags(name))`;
 
@@ -57,9 +60,13 @@ export function entryToForm(entry, { locale, went = false }) {
     .sort((a, b) => a.position - b.position)
     .map((p) => ({ id: p.id, url: p.url, caption: p.caption ?? '', blob: null, previewUrl: null, isCover: p.is_cover }));
 
+  const billed = billedArtists(entry);
+  const nameOf = (artistId) => billed.find((a) => a.id === artistId)?.name ?? null;
+
   return {
     entryType: went ? 'attended' : entry.entry_type,
     artist: entry.artists?.name ?? '',
+    coArtists: billed.slice(1).map((a) => a.name),
     venue: entry.venues?.name ?? '',
     city: entry.venues ? cityName(entry.venues, locale) : '',
     cityGeonameId: entry.venues?.city_id ?? null,
@@ -83,6 +90,7 @@ export function entryToForm(entry, { locale, went = false }) {
         isEncore: !!s.is_encore,
         isCover: !!s.is_cover,
         coverOriginalArtist: s.cover_original_artist ?? null,
+        ownerName: s.artist_id ? nameOf(s.artist_id) : null,
       })),
     attendees: (entry.entry_attendees ?? []).map((a) => a.guest_name).filter(Boolean),
     tags: (entry.entry_tags ?? []).map((tag) => tag.tags?.name).filter(Boolean),
@@ -95,17 +103,31 @@ export function entryToForm(entry, { locale, went = false }) {
 // A setlist.fm search result, applied to the form. The chosen setlist is
 // the source of truth for the show's details: it overrides what was typed
 // rather than leave e.g. a London venue on a Paris setlist.
+//
+// setlist.fm marks a song by someone else as a "cover". On a joint act
+// ("Tezzus & diamond*") that's just whose song it is, not a cover: the act
+// is split into its artists and each song remembers its owner.
 export function applySetlistfm(form, setlist) {
+  const owners = setlist.sets.flatMap((set) => set.songs.map((song) => song.coverOriginalArtist).filter(Boolean));
+  const parts = setlist.artistName ? splitJointAct(setlist.artistName, owners) : [];
+  const billed = parts.length > 1 ? parts : [form.artist, ...form.coArtists].filter((name) => name.trim());
+  const billedMatch = (name) => (name ? billed.find((b) => sameArtistName(b, name)) ?? null : null);
+
   const songs = setlist.sets.flatMap((set) =>
-    set.songs.map((song) => ({
-      id: newId(),
-      name: song.name,
-      isEncore: set.isEncore,
-      isCover: song.isCover,
-      coverOriginalArtist: song.coverOriginalArtist,
-    }))
+    set.songs.map((song) => {
+      const owner = billed.length > 1 ? billedMatch(song.coverOriginalArtist) : null;
+      return {
+        id: newId(),
+        name: song.name,
+        isEncore: set.isEncore,
+        isCover: song.isCover && !owner,
+        coverOriginalArtist: owner ? null : song.coverOriginalArtist,
+        ownerName: owner,
+      };
+    })
   );
   return {
+    ...(parts.length > 1 ? { artist: parts[0], coArtists: parts.slice(1) } : {}),
     setlist: songs,
     setlistfmId: setlist.id,
     setlistfmUrl: setlist.url,
@@ -140,13 +162,23 @@ export function entryPayload(form, { userId, artistId, venueId, festivalId }) {
   };
 }
 
+// The show's billed artist names, first-billed first, blanks and repeats dropped.
+export function billedNames(form) {
+  const names = [];
+  for (const name of [form.artist, ...form.coArtists].map((n) => n.trim()).filter(Boolean)) {
+    if (!names.some((n) => sameArtistName(n, name))) names.push(name);
+  }
+  return names;
+}
+
 // Cover first, then the rest in the order shown.
 export function photosInSaveOrder(form) {
   return [...form.photos.filter((p) => p.id === form.coverId), ...form.photos.filter((p) => p.id !== form.coverId)];
 }
 
-// entry_setlist rows; blank song lines are dropped.
-export function setlistRows(form, entryId) {
+// entry_setlist rows; blank song lines are dropped. artistIdFor(name) maps a
+// song's owner (one of the billed artists) to its id.
+export function setlistRows(form, entryId, artistIdFor = () => null) {
   return form.setlist
     .filter((s) => s.name.trim())
     .map((s, i) => ({
@@ -156,5 +188,6 @@ export function setlistRows(form, entryId) {
       is_encore: !!s.isEncore,
       is_cover: !!s.isCover,
       cover_original_artist: s.coverOriginalArtist || null,
+      artist_id: s.ownerName ? artistIdFor(s.ownerName) : null,
     }));
 }

@@ -126,6 +126,10 @@ const pl = {
     },
   },
   log: {
+    addCoArtist: 'Dodaj kolejnego wykonawcę (wspólny koncert)',
+    coArtist: 'Kolejny wykonawca',
+    coArtistPlaceholder: 'np. Young Igi',
+    removeCoArtist: 'Usuń tego wykonawcę',
     title: 'Dodaj koncert',
     editTitle: 'Edytuj koncert',
     went: 'Już za mną',

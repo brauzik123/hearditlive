@@ -1,36 +1,102 @@
 import { normalizeSongName } from './normalize';
 import { fetchAll, fetchAllIn } from './fetchAll';
 import { checked } from './checked';
+import { songCountsFor } from './showArtists';
 
 // Data for the Songs section, for any user — your own (/songs) or someone
 // else's (/u/[username]/songs). Queries run with the *viewer's* session, so
 // the database only returns entries the viewer may see: someone's
 // friends-only or private concerts simply don't count toward what you see.
 
+// Joint shows (several billed artists, see utils/showArtists.js) count for
+// each of them, but each song only for the artist it belongs to — so a
+// solo song of one doesn't land on the other's page, and totals elsewhere
+// (Stats) never double.
+const ENTRY_ARTISTS = 'id, artist_id, entry_co_artists(artist_id, position)';
+
+function billedIdsOf(entry) {
+  const rest = [...(entry.entry_co_artists ?? [])].sort((a, b) => a.position - b.position).map((c) => c.artist_id);
+  return [entry.artist_id, ...rest].filter(Boolean);
+}
+
+// Normalized names of songs the sync placed on each artist's releases.
+async function catalogKeys(supabase, artistIds) {
+  const rows = await fetchAllIn(
+    () => supabase.from('songs').select('artist_id, name, is_feature').not('spotify_track_id', 'is', null),
+    'artist_id',
+    artistIds
+  );
+  const any = new Map(); // every real song, features included
+  const own = new Map(); // the artist's own releases (what % is out of)
+  for (const row of rows) {
+    const key = normalizeSongName(row.name);
+    if (!any.has(row.artist_id)) any.set(row.artist_id, new Set());
+    any.get(row.artist_id).add(key);
+    if (!row.is_feature) {
+      if (!own.has(row.artist_id)) own.set(row.artist_id, new Set());
+      own.get(row.artist_id).add(key);
+    }
+  }
+  return { any, own };
+}
+
+// Whether a setlist row counts for artistId, given the show's billed ids.
+function creditedTo(row, artistId, billedIds, anyKeys) {
+  const key = normalizeSongName(row.song_name);
+  return songCountsFor(
+    { ownerId: row.artist_id, inCatalog: (id) => anyKeys.get(id)?.has(key) ?? false },
+    artistId,
+    billedIds
+  );
+}
+
+// The user's attended shows billed to artistId, and the setlist rows that
+// count for that artist. Also used by the background sync, so it only looks
+// up songs that are really this artist's.
+export async function creditedSetlistRows(supabase, userId, artistId) {
+  const all = await fetchAll(() =>
+    supabase.from('concert_entries').select(ENTRY_ARTISTS).eq('user_id', userId).eq('entry_type', 'attended')
+  );
+  const entries = all.filter((e) => billedIdsOf(e).includes(artistId));
+  const billedByEntry = new Map(entries.map((e) => [e.id, billedIdsOf(e)]));
+  const rows = await fetchAllIn(
+    () => supabase.from('entry_setlist').select('entry_id, song_name, artist_id'),
+    'entry_id',
+    entries.map((e) => e.id)
+  );
+  const coArtists = [...new Set(entries.flatMap(billedIdsOf))];
+  const { any } = coArtists.length > 1 ? await catalogKeys(supabase, coArtists) : { any: new Map() };
+  return {
+    entryCount: entries.length,
+    rows: rows.filter((row) => creditedTo(row, artistId, billedByEntry.get(row.entry_id), any)),
+  };
+}
+
 // Grid of every artist the user has heard live, with coverage stats.
 export async function getSongsOverview(supabase, userId) {
-  const { data: entries } = checked(
-    await supabase
-    .from('concert_entries')
-    .select('id, artist_id, artists(id, name, image_url, catalog_synced_at)')
-    .eq('user_id', userId)
-    .eq('entry_type', 'attended')
-    .not('artist_id', 'is', null)
+  const entries = await fetchAll(() =>
+    supabase
+      .from('concert_entries')
+      .select(
+        'id, artist_id, artists(id, name, image_url, catalog_synced_at), entry_co_artists(artist_id, position, artists(id, name, image_url, catalog_synced_at))'
+      )
+      .eq('user_id', userId)
+      .eq('entry_type', 'attended')
+      .not('artist_id', 'is', null)
   );
 
-  const rows = entries ?? [];
   const artistsById = new Map();
-  const entryToArtist = new Map();
-  rows.forEach((e) => {
+  const billedByEntry = new Map();
+  entries.forEach((e) => {
     if (e.artists) artistsById.set(e.artist_id, e.artists);
-    entryToArtist.set(e.id, e.artist_id);
+    (e.entry_co_artists ?? []).forEach((c) => c.artists && artistsById.set(c.artist_id, c.artists));
+    billedByEntry.set(e.id, billedIdsOf(e));
   });
 
-  const entryIds = rows.map((e) => e.id);
   const setlistRows = await fetchAllIn(
-    () => supabase.from('entry_setlist').select('entry_id, song_name'),
+    () => supabase.from('entry_setlist').select('entry_id, song_name, artist_id'),
     'entry_id',
-    entryIds
+    entries.map((e) => e.id)
   );
 
   const { data: exclusionRows } = checked(
@@ -38,33 +104,24 @@ export async function getSongsOverview(supabase, userId) {
   );
   const excluded = new Set((exclusionRows ?? []).map((r) => `${r.artist_id}::${r.song_name}`));
 
-  const namesByArtist = new Map();
-  (setlistRows ?? []).forEach((row) => {
-    const artistId = entryToArtist.get(row.entry_id);
-    if (!artistId || excluded.has(`${artistId}::${row.song_name}`)) return;
-    if (!namesByArtist.has(artistId)) namesByArtist.set(artistId, []);
-    namesByArtist.get(artistId).push(row.song_name);
-  });
-
   const artists = Array.from(artistsById.values());
-  const artistIds = artists.map((a) => a.id);
-  const catalogSongs = await fetchAllIn(
-    () => supabase.from('songs').select('artist_id, name').eq('is_feature', false).not('spotify_track_id', 'is', null),
-    'artist_id',
-    artistIds
-  );
+  const { any, own } = await catalogKeys(supabase, artists.map((a) => a.id));
 
-  const catalogByArtist = new Map();
-  (catalogSongs ?? []).forEach((s) => {
-    if (!catalogByArtist.has(s.artist_id)) catalogByArtist.set(s.artist_id, new Set());
-    catalogByArtist.get(s.artist_id).add(normalizeSongName(s.name));
+  const namesByArtist = new Map();
+  setlistRows.forEach((row) => {
+    const billed = billedByEntry.get(row.entry_id) ?? [];
+    for (const artistId of billed) {
+      if (excluded.has(`${artistId}::${row.song_name}`) || !creditedTo(row, artistId, billed, any)) continue;
+      if (!namesByArtist.has(artistId)) namesByArtist.set(artistId, []);
+      namesByArtist.get(artistId).push(row.song_name);
+    }
   });
 
   return artists
     .map((artist) => {
       const names = namesByArtist.get(artist.id) ?? [];
       const distinctNormalized = new Set(names.map(normalizeSongName));
-      const catalogSet = catalogByArtist.get(artist.id) ?? new Set();
+      const catalogSet = own.get(artist.id) ?? new Set();
       const catalogHeard = Array.from(distinctNormalized).filter((n) => catalogSet.has(n)).length;
 
       return {
@@ -84,37 +141,26 @@ export async function getSongsOverview(supabase, userId) {
 // One artist's albums/singles/features/others for the user. Returns null
 // when the artist doesn't exist or the user has no (visible) attended show.
 export async function getArtistSongs(supabase, userId, artistId) {
-  // Everything except the setlist depends only on the ids we already have,
-  // so fetch it all at once — this renders purely from cache.
-  const [{ data: artist }, { data: attendedEntries }, { data: exclusionRows }, catalogSongs, { data: albumRows }] =
-    await Promise.all([
-      supabase.from('artists').select('*').eq('id', artistId).maybeSingle().then(checked),
+  const [{ data: artist }, credited, { data: exclusionRows }, catalogSongs, { data: albumRows }] = await Promise.all([
+    supabase.from('artists').select('*').eq('id', artistId).maybeSingle().then(checked),
+    creditedSetlistRows(supabase, userId, artistId),
+    supabase.from('song_count_exclusions').select('song_name').eq('user_id', userId).eq('artist_id', artistId).then(checked),
+    fetchAll(() =>
       supabase
-        .from('concert_entries')
-        .select('id')
-        .eq('user_id', userId)
+        .from('songs')
+        .select('id, name, album_id, spotify_track_id, is_feature, track_number')
         .eq('artist_id', artistId)
-        .eq('entry_type', 'attended')
-        .then(checked),
-      supabase.from('song_count_exclusions').select('song_name').eq('user_id', userId).eq('artist_id', artistId).then(checked),
-      fetchAll(() =>
-        supabase
-          .from('songs')
-          .select('id, name, album_id, spotify_track_id, is_feature, track_number')
-          .eq('artist_id', artistId)
-      ),
-      supabase
-        .from('albums')
-        .select('id, name, image_url, release_date, total_tracks')
-        .eq('artist_id', artistId)
-        .eq('bucket', 'album')
-        .order('release_date', { ascending: false })
-        .then(checked),
-    ]);
-  if (!artist || !attendedEntries?.length) return null;
-
-  const entryIds = attendedEntries.map((e) => e.id);
-  const setlistRows = await fetchAllIn(() => supabase.from('entry_setlist').select('song_name'), 'entry_id', entryIds);
+    ),
+    supabase
+      .from('albums')
+      .select('id, name, image_url, release_date, total_tracks')
+      .eq('artist_id', artistId)
+      .eq('bucket', 'album')
+      .order('release_date', { ascending: false })
+      .then(checked),
+  ]);
+  if (!artist || !credited.entryCount) return null;
+  const setlistRows = credited.rows;
 
   const excludedNames = new Set((exclusionRows ?? []).map((r) => r.song_name));
 

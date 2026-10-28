@@ -6,6 +6,7 @@ import { getI18n } from '../../../i18n/server';
 import { getProfileAccess } from '../../../utils/profileAccess';
 import TicketStub from '../../../components/TicketStub';
 import { checked } from '../../../utils/checked';
+import { billedArtists } from '../../../utils/showArtists';
 
 // One festival, as one person experienced it: every year they went, the
 // dates, each set as a ticket, and the photos from those sets. Yours by
@@ -36,7 +37,7 @@ export default async function FestivalPage({ params, searchParams }) {
     supabase
       .from('concert_entries')
       .select(
-        'id, entry_type, event_date, rating, ticket_status, is_support, artist_id, artists(name), venues(name, city, city_id, cities(name_en, name_pl)), entry_photos(url, is_cover)'
+        'id, entry_type, event_date, rating, ticket_status, is_support, artist_id, artists(name), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, cities(name_en, name_pl)), entry_photos(url, is_cover)'
       )
       .eq('user_id', owner.id)
       .eq('festival_id', id)
@@ -58,7 +59,7 @@ export default async function FestivalPage({ params, searchParams }) {
     years.get(year).push(entry);
   }
   const yearGroups = [...years.entries()].sort(([a], [b]) => b.localeCompare(a));
-  const artistCount = new Set(rows.map((e) => e.artist_id).filter(Boolean)).size;
+  const artistCount = new Set(rows.flatMap((e) => billedArtists(e).map((a) => a.id)).filter(Boolean)).size;
   const attendedYears = yearGroups.filter(([, list]) => list.some((e) => e.entry_type === 'attended')).length;
 
   const backHref = u ? `/u/${owner.username}` : '/collection';

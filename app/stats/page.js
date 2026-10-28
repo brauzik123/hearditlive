@@ -39,7 +39,7 @@ export default async function Stats() {
 
   const { data: attended } = checked(await supabase
     .from('concert_entries')
-    .select('id, artist_id, is_support, festival_id, event_date, venue_id, artists(name), festivals(name), venues(name, city, city_id, cities(name_en, name_pl))')
+    .select('id, artist_id, is_support, festival_id, event_date, venue_id, artists(name), entry_co_artists(artist_id, position, artists(name)), festivals(name), venues(name, city, city_id, cities(name_en, name_pl))')
     .eq('user_id', user.id)
     .eq('entry_type', 'attended'));
 

@@ -53,10 +53,13 @@ export function toDate(releaseDate) {
 
 // Spotify lists every release the artist is credited on as a main artist,
 // including other people's singles ("Congratulations (Remix)" by Post
-// Malone shows up under Quavo). Only releases where they're the first
-// credit are their own; the rest are guest appearances.
+// Malone shows up under Quavo). Releases where they're the first credit are
+// their own, and so are albums credited to several artists jointly
+// ("Amfisbena" by Żabson & Young Igi); other singles are guest appearances.
 export function isOwnRelease(release, spotifyId) {
-  return release.artists?.[0]?.id === spotifyId;
+  const artists = release.artists ?? [];
+  if (artists[0]?.id === spotifyId) return true;
+  return release.album_type === 'album' && artists.some((a) => a.id === spotifyId);
 }
 
 // Own releases first, so a song lands on the artist's own release when it

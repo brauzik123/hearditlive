@@ -119,6 +119,10 @@ const en = {
     },
   },
   log: {
+    addCoArtist: 'Add another artist (joint show)',
+    coArtist: 'Another billed artist',
+    coArtistPlaceholder: 'e.g. Young Igi',
+    removeCoArtist: 'Remove this artist',
     title: 'Log a show',
     editTitle: 'Edit show',
     went: 'I went',

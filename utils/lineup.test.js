@@ -47,6 +47,16 @@ describe('rankArtists', () => {
     expect(ranked[0].shows).toBe(2);
   });
 
+  it('counts a joint show as a show for each billed artist', () => {
+    const amfisbena = (id) =>
+      show('Żabson', { id, entry_co_artists: [{ artist_id: 'young igi', position: 1, artists: { name: 'Young Igi' } }] });
+    const ranked = rankArtists([amfisbena('a1'), amfisbena('a2')]);
+    expect(ranked.map((a) => [a.name, a.shows])).toEqual([
+      ['Young Igi', 2],
+      ['Żabson', 2],
+    ]);
+  });
+
   it('skips shows without an artist', () => {
     expect(rankArtists([{ id: '1', artists: null }])).toEqual([]);
   });

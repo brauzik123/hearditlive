@@ -1,4 +1,4 @@
-import { Music, Calendar, Mic2, Tent } from 'lucide-react';
+import { Music, Calendar, Mic2, Tent, Plus, X } from 'lucide-react';
 import { useI18n } from '../../../i18n/client';
 import { TICKET_STATUSES } from '../_lib/entryForm';
 import { Field, Section } from './fields';
@@ -23,6 +23,8 @@ export function BasicsSection({ form, update, myFestivals }) {
           <input type="date" className="field" value={form.date} onChange={(e) => update({ date: e.target.value })} />
         </Field>
       </div>
+
+      <CoArtistsField form={form} update={update} />
 
       {/* setlist.fm right after artist + date: one tap fills in most of
           the rest. Upcoming shows have no setlist yet. */}
@@ -131,6 +133,48 @@ export function FestivalField({ form, update, myFestivals }) {
           </Field>
         </div>
       )}
+    </div>
+  );
+}
+
+// Other billed artists of a joint show ("Żabson & Young Igi"). The show
+// counts for each of them; each song still counts only for whoever it's by.
+function CoArtistsField({ form, update }) {
+  const { t } = useI18n();
+  const setAt = (i, value) => update({ coArtists: form.coArtists.map((name, j) => (j === i ? value : name)) });
+  const removeAt = (i) => update({ coArtists: form.coArtists.filter((_, j) => j !== i) });
+
+  return (
+    <div className="flex flex-col gap-2">
+      {form.coArtists.map((name, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <span className="marquee shrink-0 text-xl text-muted" aria-hidden="true">
+            &amp;
+          </span>
+          <input
+            className="field"
+            placeholder={t('log.coArtistPlaceholder')}
+            aria-label={t('log.coArtist')}
+            value={name}
+            onChange={(e) => setAt(i, e.target.value)}
+          />
+          <button
+            type="button"
+            onClick={() => removeAt(i)}
+            aria-label={t('log.removeCoArtist')}
+            className="shrink-0 rounded-full p-1 text-muted hover:text-foreground"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => update({ coArtists: [...form.coArtists, ''] })}
+        className="flex items-center gap-1.5 self-start text-sm text-muted transition hover:text-foreground"
+      >
+        <Plus size={14} /> {t('log.addCoArtist')}
+      </button>
     </div>
   );
 }

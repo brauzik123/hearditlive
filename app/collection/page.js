@@ -7,6 +7,7 @@ import { createClient } from '../../utils/supabase/client';
 import { useI18n } from '../../i18n/client';
 import TicketStub from '../../components/TicketStub';
 import { formatRating } from '../../utils/rating';
+import { billedName } from '../../utils/showArtists';
 import { cityName } from '../../utils/placeNames';
 
 const SORTS = ['date_desc', 'date_asc', 'rating_desc', 'artist_asc'];
@@ -60,7 +61,7 @@ export default function Collection() {
         .from('concert_entries')
         .select(
           `id, entry_type, event_date, rating, ticket_status, is_support, is_favorite, festival_id,
-           artist_id, artists(name, image_url), venues(name, city, city_id, cities(name_en, name_pl)), festivals(name),
+           artist_id, artists(name, image_url), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, cities(name_en, name_pl)), festivals(name),
            entry_photos(url, is_cover)`
         )
         .eq('user_id', user.id)
@@ -114,7 +115,7 @@ export default function Collection() {
     if (q) {
       list = list.filter(
         (e) =>
-          e.artists?.name?.toLowerCase().includes(q) ||
+          billedName(e)?.toLowerCase().includes(q) ||
           e.venues?.name?.toLowerCase().includes(q) ||
           cityName(e.venues, locale).toLowerCase().includes(q) ||
           (e.venues?.city ?? '').toLowerCase().includes(q)
@@ -126,7 +127,7 @@ export default function Collection() {
     return [...list].sort((a, b) => {
       if (sort === 'date_asc') return (a.event_date ?? '').localeCompare(b.event_date ?? '');
       if (sort === 'rating_desc') return (b.rating ?? 0) - (a.rating ?? 0);
-      if (sort === 'artist_asc') return (a.artists?.name ?? '').localeCompare(b.artists?.name ?? '');
+      if (sort === 'artist_asc') return (billedName(a) ?? '').localeCompare(billedName(b) ?? '');
       return (b.event_date ?? '').localeCompare(a.event_date ?? '');
     });
   }, [entries, query, sort, favoritesOnly, festivalFilter, locale]);
@@ -243,7 +244,7 @@ export default function Collection() {
                 </div>
               )}
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background via-background/70 to-transparent p-3 pt-10">
-                <p className="marquee truncate text-2xl">{entry.artists?.name ?? t('common.unknownArtist')}</p>
+                <p className="marquee truncate text-2xl">{billedName(entry) ?? t('common.unknownArtist')}</p>
                 <p className="flex items-center justify-between text-xs text-muted">
                   <span>{date(entry.event_date)}</span>
                   {entry.rating != null && (

@@ -92,6 +92,12 @@ describe('own releases vs. features', () => {
     expect(isOwnRelease(remix, QUAVO)).toBe(false);
   });
 
+  it("counts a joint album as each credited artist's own", () => {
+    const amfisbena = release({ id: 'amf', name: 'Amfisbena', artist: ['zabson', QUAVO] });
+    expect(isOwnRelease(amfisbena, QUAVO)).toBe(true);
+    expect(isOwnRelease(amfisbena, 'zabson')).toBe(true);
+  });
+
   it('puts own releases first so they claim shared songs', () => {
     expect(orderReleases([remix, ownAlbum], QUAVO).map((r) => r.id)).toEqual(['qrome', 'congrats']);
   });
@@ -109,8 +115,8 @@ describe('own releases vs. features', () => {
     ]);
   });
 
-  it("keeps only the artist's own tracks from someone else's album", () => {
-    const compilation = release({ id: 'comp', name: 'Culture', artist: ['migos', QUAVO] });
+  it("keeps only the artist's own tracks from someone else's EP", () => {
+    const compilation = release({ id: 'comp', name: 'Culture EP', type: 'single', tracks: 2, artist: ['migos', QUAVO] });
     const { albums, songs } = buildCatalog(
       [compilation],
       [[track('t1', 'Bad and Boujee', ['migos', QUAVO]), track('t2', 'T-Shirt', ['migos'])]],

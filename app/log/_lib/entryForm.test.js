@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applySetlistfm,
+  billedNames,
   emptyForm,
   entryPayload,
   entryToForm,
@@ -148,8 +149,8 @@ describe('saving', () => {
   it('drops blank songs and numbers the rest in order', () => {
     const form = { ...emptyForm, setlist: [{ name: ' One ' }, { name: '  ' }, { name: 'Two', isEncore: true }] };
     expect(setlistRows(form, 'e1')).toEqual([
-      { entry_id: 'e1', song_name: 'One', position: 0, is_encore: false, is_cover: false, cover_original_artist: null },
-      { entry_id: 'e1', song_name: 'Two', position: 1, is_encore: true, is_cover: false, cover_original_artist: null },
+      { entry_id: 'e1', song_name: 'One', position: 0, is_encore: false, is_cover: false, cover_original_artist: null, artist_id: null },
+      { entry_id: 'e1', song_name: 'Two', position: 1, is_encore: true, is_cover: false, cover_original_artist: null, artist_id: null },
     ]);
   });
 });
@@ -159,5 +160,70 @@ describe('setlistfmDateToIso', () => {
     expect(setlistfmDateToIso('05-08-2026')).toBe('2026-08-05');
     expect(setlistfmDateToIso('')).toBeNull();
     expect(setlistfmDateToIso(null)).toBeNull();
+  });
+});
+
+describe('joint shows', () => {
+  const tezzus = {
+    id: 'sfm2',
+    url: 'https://www.setlist.fm/setlist/y',
+    eventDate: '21-10-2026',
+    artistName: 'Tezzus & diamond*',
+    venueName: 'Atlas Arena',
+    city: 'Łódź',
+    sets: [
+      {
+        isEncore: false,
+        songs: [
+          { name: '3 PhØnes', isCover: true, coverOriginalArtist: 'diamond*' },
+          { name: 'Aubrey', isCover: true, coverOriginalArtist: 'Tezzus' },
+          { name: 'Sexoholik', isCover: true, coverOriginalArtist: 'Żabson' },
+        ],
+      },
+    ],
+  };
+
+  it('splits a joint act and credits each song to its artist instead of calling it a cover', () => {
+    const patch = applySetlistfm({ ...emptyForm, artist: 'Tezzus' }, tezzus);
+    expect(patch.artist).toBe('Tezzus');
+    expect(patch.coArtists).toEqual(['diamond*']);
+    expect(patch.setlist.map(({ name, isCover, ownerName }) => [name, isCover, ownerName])).toEqual([
+      ['3 PhØnes', false, 'diamond*'],
+      ['Aubrey', false, 'Tezzus'],
+      ['Sexoholik', true, null],
+    ]);
+  });
+
+  it('uses the artists typed in the form when setlist.fm files the show under one of them', () => {
+    const form = { ...emptyForm, artist: 'Żabson', coArtists: ['Young Igi'] };
+    const patch = applySetlistfm(form, {
+      ...tezzus,
+      artistName: 'Żabson',
+      sets: [{ isEncore: false, songs: [{ name: 'Solo', isCover: true, coverOriginalArtist: 'Young Igi' }] }],
+    });
+    expect(patch.coArtists).toBeUndefined();
+    expect(patch.setlist[0]).toMatchObject({ isCover: false, ownerName: 'Young Igi' });
+  });
+
+  it('loads co-billed artists and song owners back for editing', () => {
+    const form = entryToForm(
+      {
+        ...savedEntry,
+        artist_id: 'z',
+        artists: { name: 'Żabson' },
+        entry_co_artists: [{ artist_id: 'i', position: 1, artists: { name: 'Young Igi' } }],
+        entry_setlist: [{ song_name: 'Solo', position: 0, artist_id: 'i' }],
+      },
+      { locale: 'en' }
+    );
+    expect(form.coArtists).toEqual(['Young Igi']);
+    expect(form.setlist[0].ownerName).toBe('Young Igi');
+  });
+
+  it('saves each song with its owner and drops blank or repeated artists', () => {
+    const form = { ...emptyForm, artist: 'Żabson', coArtists: [' ', 'Young Igi', 'żabson'], setlist: [{ name: 'Solo', ownerName: 'Young Igi' }] };
+    expect(billedNames(form)).toEqual(['Żabson', 'Young Igi']);
+    const ids = { 'Young Igi': 'i' };
+    expect(setlistRows(form, 'e1', (name) => ids[name] ?? null)[0].artist_id).toBe('i');
   });
 });

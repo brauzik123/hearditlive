@@ -7,7 +7,7 @@ import PastPlans from '../components/PastPlans';
 import { countOutings } from '../utils/outings';
 import { checked } from '../utils/checked';
 
-const ENTRY_FIELDS = 'id, entry_type, event_date, rating, ticket_status, is_support, created_at, artists(name), venues(name, city, city_id, cities(name_en, name_pl))';
+const ENTRY_FIELDS = 'id, entry_type, event_date, rating, ticket_status, is_support, created_at, artists(name), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, cities(name_en, name_pl))';
 
 export default async function Home() {
   const supabase = await createClient();
@@ -21,7 +21,7 @@ export default async function Home() {
   const [{ data: attended }, { data: lastShowRows }, { data: upcoming }, { data: followRows }, { data: pastPlans }] = (await Promise.all([
     supabase
       .from('concert_entries')
-      .select('id, artist_id, festival_id, event_date, venue_id, venues(city, city_id)')
+      .select('id, artist_id, festival_id, event_date, venue_id, venues(city, city_id), entry_co_artists(artist_id)')
       .eq('user_id', user.id)
       .eq('entry_type', 'attended'),
     supabase
@@ -67,7 +67,10 @@ export default async function Home() {
 
   // Festivals count once per year, like the Stats page.
   const shows = countOutings(attended ?? []);
-  const artists = new Set((attended ?? []).map((e) => e.artist_id).filter(Boolean)).size;
+  // Joint shows count each billed artist.
+  const artists = new Set(
+    (attended ?? []).flatMap((e) => [e.artist_id, ...(e.entry_co_artists ?? []).map((c) => c.artist_id)]).filter(Boolean)
+  ).size;
   const cities = new Set(
     (attended ?? [])
       .map((e) => (e.venues?.city_id ? `id:${e.venues.city_id}` : e.venues?.city?.trim().toLowerCase()))

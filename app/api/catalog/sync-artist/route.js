@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '../../../../utils/supabase/server';
 import { createAdminClient } from '../../../../utils/supabase/admin';
 import { rateLimit } from '../../../../utils/rateLimit';
-import { fetchAllIn } from '../../../../utils/fetchAll';
+import { creditedSetlistRows } from '../../../../utils/songsData';
 import { ensureArtistGroups, ensureArtistSynced, isInBackoff, resolveHeardSongsForArtist } from '../../../../utils/catalogSync';
 
 // Rebuilds one artist's catalog from Spotify (if stale) and classifies the
@@ -30,15 +30,7 @@ export async function POST(request) {
   const ownerId = typeof userId === 'string' ? userId : user.id;
 
   const admin = createAdminClient();
-  const [{ data: artist }, { data: entries }] = await Promise.all([
-    admin.from('artists').select('*').eq('id', artistId).maybeSingle(),
-    supabase
-      .from('concert_entries')
-      .select('id')
-      .eq('user_id', ownerId)
-      .eq('artist_id', artistId)
-      .eq('entry_type', 'attended'),
-  ]);
+  const { data: artist } = await admin.from('artists').select('*').eq('id', artistId).maybeSingle();
   if (!artist) return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
 
   try {
@@ -49,10 +41,11 @@ export async function POST(request) {
     // Classify heard songs only against a real catalog, and not while the
     // artist is backing off from a failure (another sync holding the claim,
     // or Spotify rate-limiting us) — those cases retry on a later visit.
-    const entryIds = (entries ?? []).map((e) => e.id);
-    if (entryIds.length && synced.catalog_synced_at && !isInBackoff(synced)) {
-      const setlistRows = await fetchAllIn(() => supabase.from('entry_setlist').select('song_name'), 'entry_id', entryIds);
-      const heardNames = Array.from(new Set(setlistRows.map((r) => r.song_name)));
+    // On joint shows, only the songs credited to this artist (not the
+    // co-billed artist's solo songs) are looked up.
+    if (synced.catalog_synced_at && !isInBackoff(synced)) {
+      const { rows } = await creditedSetlistRows(supabase, ownerId, artistId);
+      const heardNames = Array.from(new Set(rows.map((r) => r.song_name)));
       if (heardNames.length) await resolveHeardSongsForArtist(admin, synced, heardNames);
     }
     return NextResponse.json({ ok: true });

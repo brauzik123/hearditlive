@@ -1,5 +1,6 @@
 import { newId } from '../../../utils/id';
-import { entryPayload, exact, photosInSaveOrder, setlistRows } from './entryForm';
+import { sameArtistName } from '../../../utils/normalize';
+import { billedNames, entryPayload, exact, photosInSaveOrder, setlistRows } from './entryForm';
 
 // Writes a log entry (new or edited) and everything attached to it.
 // Returns the entry id.
@@ -61,7 +62,12 @@ export async function saveEntry(supabase, { form, editId }) {
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not signed in.');
 
-  const artistId = form.artist.trim() ? await resolveArtist(supabase, form.artist.trim()) : null;
+  // Billed artists in order; the first is the entry's artist, the rest go
+  // to entry_co_artists (joint shows).
+  const names = billedNames(form);
+  const billed = [];
+  for (const name of names) billed.push({ name, id: await resolveArtist(supabase, name) });
+  const artistId = billed[0]?.id ?? null;
   const venueId = form.venue.trim() ? await resolveVenue(form) : null;
   const festivalId =
     form.isFestival && form.festivalName.trim()
@@ -78,6 +84,7 @@ export async function saveEntry(supabase, { form, editId }) {
       supabase.from('entry_setlist').delete().eq('entry_id', editId),
       supabase.from('entry_attendees').delete().eq('entry_id', editId),
       supabase.from('entry_tags').delete().eq('entry_id', editId),
+      supabase.from('entry_co_artists').delete().eq('entry_id', editId),
     ]);
   } else {
     const { data: created, error: insertError } = await supabase.from('concert_entries').insert(payload).select('id').single();
@@ -112,7 +119,17 @@ export async function saveEntry(supabase, { form, editId }) {
     if (photosError) throw photosError;
   }
 
-  const songs = setlistRows(form, entryId);
+  const coRows = billed
+    .slice(1)
+    .filter((a, i, list) => a.id !== artistId && list.findIndex((b) => b.id === a.id) === i)
+    .map((a, i) => ({ entry_id: entryId, artist_id: a.id, position: i + 1 }));
+  if (coRows.length) {
+    const { error: coError } = await supabase.from('entry_co_artists').insert(coRows);
+    if (coError) throw coError;
+  }
+
+  const artistIdFor = (name) => billed.find((a) => sameArtistName(a.name, name))?.id ?? null;
+  const songs = setlistRows(form, entryId, artistIdFor);
   if (songs.length) {
     const { error: setlistError } = await supabase.from('entry_setlist').insert(songs);
     if (setlistError) throw setlistError;

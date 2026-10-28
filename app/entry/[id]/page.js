@@ -7,6 +7,7 @@ import DeleteEntryButton from '../../../components/DeleteEntryButton';
 import TicketStub from '../../../components/TicketStub';
 import Avatar from '../../../components/Avatar';
 import { checked } from '../../../utils/checked';
+import { billedArtists } from '../../../utils/showArtists';
 
 const VISIBILITY_ICON = { public: Globe, friends: UserCheck, private: Lock };
 const RANK = { public: 0, friends: 1, private: 2 };
@@ -24,9 +25,9 @@ export default async function EntryDetail({ params }) {
     await supabase
     .from('concert_entries')
     .select(
-      `*, artists(name), venues(name, city, city_id, cities(name_en, name_pl)), festivals(name),
+      `*, artists(name), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, cities(name_en, name_pl)), festivals(name),
        entry_photos(id, url, caption, position),
-       entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist),
+       entry_setlist(song_name, position, is_encore, is_cover, cover_original_artist, artist_id),
        entry_attendees(guest_name),
        entry_tags(tags(name)),
        profiles!concert_entries_user_id_fkey(username, avatar_url, default_entry_visibility, profile_visibility)`
@@ -59,6 +60,9 @@ export default async function EntryDetail({ params }) {
   const setlist = (entry.entry_setlist ?? []).sort((a, b) => a.position - b.position);
   const mainSet = setlist.filter((s) => !s.is_encore);
   const encore = setlist.filter((s) => s.is_encore);
+  // On a joint show, each song says whose it is (when known).
+  const billed = billedArtists(entry);
+  const songOwner = (song) => (billed.length > 1 ? billed.find((a) => a.id === song.artist_id)?.name : null);
   const attendees = (entry.entry_attendees ?? []).map((a) => a.guest_name).filter(Boolean);
   const tags = (entry.entry_tags ?? []).map((tag) => tag.tags?.name).filter(Boolean);
 
@@ -158,7 +162,7 @@ export default async function EntryDetail({ params }) {
           </div>
           <ol className="flex flex-col">
             {mainSet.map((song, i) => (
-              <SetlistRow key={`m-${i}`} number={i + 1} song={song} t={t} />
+              <SetlistRow key={`m-${i}`} number={i + 1} song={song} owner={songOwner(song)} t={t} />
             ))}
           </ol>
           {encore.length > 0 && (
@@ -168,7 +172,7 @@ export default async function EntryDetail({ params }) {
               </p>
               <ol className="flex flex-col">
                 {encore.map((song, i) => (
-                  <SetlistRow key={`e-${i}`} number={mainSet.length + i + 1} song={song} t={t} />
+                  <SetlistRow key={`e-${i}`} number={mainSet.length + i + 1} song={song} owner={songOwner(song)} t={t} />
                 ))}
               </ol>
             </>
@@ -202,12 +206,13 @@ export default async function EntryDetail({ params }) {
   );
 }
 
-function SetlistRow({ number, song, t }) {
+function SetlistRow({ number, song, owner, t }) {
   return (
     <li className="flex items-baseline gap-4 border-b border-border/60 py-2 last:border-b-0">
       <span className="marquee w-6 shrink-0 text-right text-lg text-muted">{number}</span>
       <span className="flex-1">
         {song.song_name}
+        {owner && <span className="ml-2 text-xs text-muted">{owner}</span>}
         {song.is_cover && (
           <span className="ml-2 text-xs text-muted">
             {song.cover_original_artist ? t('entry.coverOf', { artist: song.cover_original_artist }) : t('entry.cover')}

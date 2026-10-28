@@ -52,7 +52,7 @@ export function MediaSection({ form, update }) {
 
   const addSong = () =>
     update({
-      setlist: [...form.setlist, { id: newId(), name: '', isEncore: false, isCover: false, coverOriginalArtist: null }],
+      setlist: [...form.setlist, { id: newId(), name: '', isEncore: false, isCover: false, coverOriginalArtist: null, ownerName: null }],
     });
   const updateSong = (id, name) => update({ setlist: form.setlist.map((s) => (s.id === id ? { ...s, name } : s)) });
   const removeSong = (id) => update({ setlist: form.setlist.filter((s) => s.id !== id) });
@@ -179,6 +179,9 @@ export function MediaSection({ form, update }) {
               value={song.name}
               onChange={(e) => updateSong(song.id, e.target.value)}
             />
+            {song.ownerName && form.coArtists.length > 0 && (
+              <span className="max-w-24 shrink-0 truncate text-xs text-muted">{song.ownerName}</span>
+            )}
             {song.isEncore && <span className="shrink-0 text-xs text-brand">{t('entry.encore')}</span>}
             <button
               onClick={() => removeSong(song.id)}
