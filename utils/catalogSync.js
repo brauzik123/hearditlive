@@ -10,7 +10,7 @@ import {
 } from './spotify';
 import { normalizeSongName } from './normalize';
 import { fetchAll } from './fetchAll';
-import { buildCatalog, creditedName, officialSpelling, orderReleases, pickEditions } from './releases';
+import { buildCatalog, classifyHeardTrack, creditedName, officialSpelling, orderReleases, pickEditions } from './releases';
 import { findArtistMbid, getBandMemberships } from './musicbrainz';
 
 export { normalizeSongName };
@@ -126,6 +126,15 @@ export async function resolveHeardSongsForArtist(supabase, artist, heardNames) {
 
   if (artist.spotify_id && (await spotifyBlockedUntil(supabase))) return;
 
+  // Bands the artist is in (see ensureArtistGroups): a heard song found on a
+  // band's release is filed under that band, not as the artist's feature.
+  const { data: groupLinks } = await supabase
+    .from('artist_groups')
+    .select('artists!artist_groups_group_id_fkey(id, name, spotify_id)')
+    .eq('artist_id', artist.id);
+  const bands = (groupLinks ?? []).map((g) => g.artists).filter(Boolean);
+  const bandRows = [];
+
   // Bounded per sync, so a setlist full of made-up names can't fan out into
   // hundreds of Spotify searches at once; the rest resolve on later visits.
   const batch = unmatched.slice(0, MAX_SONG_LOOKUPS_PER_SYNC);
@@ -153,8 +162,14 @@ export async function resolveHeardSongsForArtist(supabase, artist, heardNames) {
     );
     if (!hit) return base;
 
-    const ownRelease = hit.album.artists.some((a) => a.id === artist.spotify_id);
-    return { ...base, spotify_track_id: hit.id, is_feature: !ownRelease };
+    const { kind, band } = classifyHeardTrack(hit, artist.spotify_id, bands);
+    if (kind === 'band') {
+      // The artist keeps a placeholder (so it isn't searched again); the
+      // song itself goes on the band, where the Songs page looks for it.
+      bandRows.push({ artist_id: band.id, name: hit.name, album_id: null, spotify_track_id: hit.id, is_feature: false });
+      return base;
+    }
+    return { ...base, spotify_track_id: hit.id, is_feature: kind === 'feature' };
   });
 
   // Two heard names can resolve to the same track; the second becomes an
@@ -180,14 +195,21 @@ export async function resolveHeardSongsForArtist(supabase, artist, heardNames) {
     .from('songs')
     .upsert(deduped, { onConflict: 'artist_id,name', ignoreDuplicates: true });
   if (error) console.error('heard songs upsert failed:', error.message);
+
+  // One at a time: a band whose full catalog is already stored may have the
+  // track under another title, which would fail a batch on its unique index.
+  for (const row of bandRows) {
+    await supabase.from('songs').upsert(row, { onConflict: 'artist_id,name', ignoreDuplicates: true });
+  }
 }
 
 const GROUPS_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Looks up which bands the artist is in (MusicBrainz), makes sure each band
-// exists as an artist with a synced catalog, and records the membership.
-// Heard songs that turn out to be the band's then show under the band on
-// the artist's Songs page. Checked once per 30 days per artist; failures
+// Looks up which bands the artist is in (MusicBrainz, no Spotify calls),
+// makes sure each band exists as an artist, and records the membership.
+// Band catalogs aren't downloaded: the track search for each unmatched heard
+// song already says whose release it's on, and a band's songs are filed
+// under the band then (resolveHeardSongsForArtist). Checked once per 30 days per artist; failures
 // just mean no band tiles until the next check.
 export async function ensureArtistGroups(supabase, artist) {
   const fresh =
@@ -224,7 +246,6 @@ export async function ensureArtistGroups(supabase, artist) {
       }
       if (row.id === artist.id) continue;
       await supabase.from('artist_groups').upsert({ artist_id: artist.id, group_id: row.id });
-      await ensureArtistSynced(supabase, row);
     }
   } catch (err) {
     console.error('band lookup failed:', err.message);

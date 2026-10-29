@@ -1,5 +1,5 @@
 import { bestImage } from './spotify';
-import { normalizeSongName } from './normalize';
+import { normalizeSongName, sameArtistName } from './normalize';
 
 // Turning an artist's Spotify releases into the Songs catalog: which
 // releases to keep, which get an album tile, and which song lands where.
@@ -120,4 +120,18 @@ export function officialSpelling(typed, spotifyName) {
 // The artist's own name as Spotify credits it on their releases.
 export function creditedName(releases, spotifyId) {
   return releases.find((r) => isOwnRelease(r, spotifyId))?.artists[0].name ?? null;
+}
+
+// What a heard song found by a Spotify track search is to this artist:
+// 'own' (on the artist's own release), 'band' (on a release by one of the
+// bands they're in, matched by Spotify id or name, since bands come from
+// MusicBrainz and may not be linked to Spotify), or 'feature' (someone
+// else's release they're on). bands: [{ id, name, spotify_id }].
+export function classifyHeardTrack(track, spotifyId, bands = []) {
+  const releaseArtists = track.album?.artists ?? [];
+  if (releaseArtists.some((a) => a.id === spotifyId)) return { kind: 'own' };
+  const band = bands.find((b) =>
+    releaseArtists.some((a) => (b.spotify_id && a.id === b.spotify_id) || sameArtistName(a.name, b.name))
+  );
+  return band ? { kind: 'band', band } : { kind: 'feature' };
 }

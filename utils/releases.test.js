@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCatalog,
+  classifyHeardTrack,
   creditedName,
   editionKey,
   isOwnRelease,
@@ -187,5 +188,28 @@ describe('creditedName', () => {
     own.artists[0].name = 'Quavo';
     expect(creditedName([feature, own], QUAVO)).toBe('Quavo');
     expect(creditedName([feature], QUAVO)).toBeNull();
+  });
+});
+
+describe('classifyHeardTrack', () => {
+  const migos = { id: 'migos-row', name: 'Migos', spotify_id: null };
+  const track = (albumArtists) => ({ id: 't', album: { artists: albumArtists } });
+
+  it("knows the artist's own releases", () => {
+    expect(classifyHeardTrack(track([{ id: QUAVO, name: 'Quavo' }]), QUAVO, [migos])).toEqual({ kind: 'own' });
+  });
+
+  it('files a song from a band release under that band, by name', () => {
+    expect(classifyHeardTrack(track([{ id: 'sp-migos', name: 'Migos' }]), QUAVO, [migos])).toEqual({ kind: 'band', band: migos });
+  });
+
+  it('matches a band by Spotify id even when the names differ', () => {
+    const linked = { id: 'row', name: 'Unc and Phew', spotify_id: 'sp-up' };
+    expect(classifyHeardTrack(track([{ id: 'sp-up', name: "UNC'N'PHEW" }]), QUAVO, [linked]).kind).toBe('band');
+  });
+
+  it("calls anything else a feature", () => {
+    expect(classifyHeardTrack(track([{ id: 'post', name: 'Post Malone' }]), QUAVO, [migos])).toEqual({ kind: 'feature' });
+    expect(classifyHeardTrack(track([{ id: 'post', name: 'Post Malone' }]), QUAVO)).toEqual({ kind: 'feature' });
   });
 });
