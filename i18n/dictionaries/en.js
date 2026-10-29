@@ -267,6 +267,7 @@ const en = {
     title: 'Friends',
     backToProfile: 'Profile',
     tabs: {
+      activity: 'Activity',
       friends: 'Friends',
       requests: 'Requests',
       find: 'Find people',

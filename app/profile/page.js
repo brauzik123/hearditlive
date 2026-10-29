@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { Settings, UserPlus, Lock, Music2 } from 'lucide-react';
 import { createClient } from '../../utils/supabase/server';
 import { getI18n } from '../../i18n/server';
-import CopyButton from '../../components/CopyButton';
 import ProfileHeader from '../../components/ProfileHeader';
 import TicketStub from '../../components/TicketStub';
 import Avatar from '../../components/Avatar';
@@ -17,7 +16,6 @@ export default async function Profile() {
 
   const [
     { data: profile },
-    { data: friendCode },
     { count: followers },
     { count: following },
     { count: shows },
@@ -26,8 +24,6 @@ export default async function Profile() {
     { count: pendingRequests },
   ] = (await Promise.all([
     supabase.from('profiles').select('username, bio, avatar_url, profile_visibility').eq('id', user.id).single(),
-    // friend_code isn't selectable directly (it'd be visible to everyone).
-    supabase.rpc('my_friend_code'),
     supabase.from('follows').select('*', { count: 'exact', head: true }).eq('followee_id', user.id).eq('status', 'accepted'),
     supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', user.id).eq('status', 'accepted'),
     supabase
@@ -93,13 +89,6 @@ export default async function Profile() {
           >
             <Music2 size={15} /> {t('nav.songs')}
           </Link>
-        </div>
-        <div className="flex items-center justify-between rounded-xl border border-dashed border-border px-4 py-3">
-          <div>
-            <p className="text-xs text-muted">{t('profile.friendCode')}</p>
-            <p className="marquee text-2xl tracking-wider">{friendCode}</p>
-          </div>
-          <CopyButton text={friendCode ?? ''} />
         </div>
         {profile?.profile_visibility !== 'public' && (
           <p className="flex items-center gap-1.5 text-xs text-muted">

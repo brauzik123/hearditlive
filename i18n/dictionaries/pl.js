@@ -274,6 +274,7 @@ const pl = {
     title: 'Znajomi',
     backToProfile: 'Profil',
     tabs: {
+      activity: 'Aktywność',
       friends: 'Znajomi',
       requests: 'Prośby',
       find: 'Szukaj',
