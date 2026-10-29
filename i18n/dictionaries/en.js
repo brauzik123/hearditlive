@@ -127,6 +127,11 @@ const en = {
     },
   },
   log: {
+    duplicate: 'You already logged {artist} on {date}.',
+    duplicateHint: 'Saving will add it a second time.',
+    duplicateOpen: 'Open the one you logged',
+    pickDate: 'Pick a date',
+    dateInvalid: 'Not a valid date. Use {format}.',
     ownerAuto: 'Auto',
     ownerCover: 'Cover…',
     by: 'by {name}',
@@ -361,6 +366,9 @@ const en = {
     noSongs: 'No songs here.',
   },
   stats: {
+    guests: 'Guests on stage',
+    guestShows: { one: 'at {count} show', other: 'at {count} shows' },
+    guestSongs: { one: '{count} song', other: '{count} songs' },
     together: 'Most often with',
     togetherEvents: { one: '{count} event together', other: '{count} events together' },
     togetherShows: { one: '{count} show', other: '{count} shows' },

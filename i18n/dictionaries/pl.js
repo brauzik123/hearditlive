@@ -134,6 +134,11 @@ const pl = {
     },
   },
   log: {
+    duplicate: 'Ten koncert jest już w Twojej kolekcji: {artist}, {date}.',
+    duplicateHint: 'Zapisanie doda go drugi raz.',
+    duplicateOpen: 'Otwórz zapisany koncert',
+    pickDate: 'Wybierz datę',
+    dateInvalid: 'Nieprawidłowa data. Użyj formatu {format}.',
     ownerAuto: 'Automatycznie',
     ownerCover: 'Cover…',
     by: 'wykonawca: {name}',
@@ -373,6 +378,9 @@ const pl = {
     noSongs: 'Brak piosenek.',
   },
   stats: {
+    guests: 'Goście na scenie',
+    guestShows: { one: 'na {count} koncercie', few: 'na {count} koncertach', many: 'na {count} koncertach', other: 'na {count} koncertu' },
+    guestSongs: { one: '{count} utwór', few: '{count} utwory', many: '{count} utworów', other: '{count} utworu' },
     together: 'Najczęściej z',
     togetherEvents: { one: '{count} wspólne wydarzenie', few: '{count} wspólne wydarzenia', many: '{count} wspólnych wydarzeń', other: '{count} wspólnego wydarzenia' },
     togetherShows: { one: '{count} koncert', few: '{count} koncerty', many: '{count} koncertów', other: '{count} koncertu' },

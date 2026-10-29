@@ -4,8 +4,10 @@ import { TICKET_STATUSES } from '../_lib/entryForm';
 import { Field, Section } from './fields';
 import { CityInput, VenueInput } from './PlaceInputs';
 import { SetlistfmImport } from './SetlistfmImport';
+import { DateField } from './DateField';
+import { DuplicateWarning } from './DuplicateWarning';
 
-export function BasicsSection({ form, update, myFestivals }) {
+export function BasicsSection({ form, update, myFestivals, editId }) {
   const { t } = useI18n();
   const attended = form.entryType === 'attended';
   return (
@@ -20,11 +22,17 @@ export function BasicsSection({ form, update, myFestivals }) {
           />
         </Field>
         <Field label={attended ? t('log.date') : t('log.dateIfKnown')} icon={Calendar}>
-          <input type="date" className="field" value={form.date} onChange={(e) => update({ date: e.target.value })} />
+          <DateField
+            value={form.date}
+            onChange={(date) => update({ date })}
+            label={attended ? t('log.date') : t('log.dateIfKnown')}
+          />
         </Field>
       </div>
 
       <CoArtistsField form={form} update={update} />
+
+      <DuplicateWarning form={form} editId={editId} />
 
       {/* setlist.fm right after artist + date: one tap fills in most of
           the rest. Upcoming shows have no setlist yet. */}

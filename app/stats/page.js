@@ -8,6 +8,7 @@ import { fetchAllIn } from '../../utils/fetchAll';
 import { checked } from '../../utils/checked';
 import { billing, LINEUP_SIZE, rankArtists } from '../../utils/lineup';
 import { togetherCounts } from '../../utils/together';
+import { guestAppearances } from '../../utils/guests';
 import Avatar from '../../components/Avatar';
 
 function topCounts(items, keyFn, limit) {
@@ -47,7 +48,7 @@ export default async function Stats() {
 
   const entries = attended ?? [];
   const entryIds = entries.map((e) => e.id);
-  const setlistRows = await fetchAllIn(() => supabase.from('entry_setlist').select('entry_id, song_name'), 'entry_id', entryIds);
+  const setlistRows = await fetchAllIn(() => supabase.from('entry_setlist').select('entry_id, song_name, guest_artist_id, guest:artists!entry_setlist_guest_artist_id_fkey(name)'), 'entry_id', entryIds);
 
   // Cities and venues are counted by identity (a linked GeoNames city, a
   // venue row), so "Warsaw" and "Warszawa" are one city; festivals count
@@ -67,6 +68,7 @@ export default async function Stats() {
 
   const lineup = billing(ranked.slice(0, LINEUP_SIZE));
   const together = togetherCounts(entries).slice(0, 5);
+  const guests = guestAppearances(setlistRows).slice(0, 5);
   const topSongs = topCounts(setlistRows ?? [], (s) => s.song_name, 10);
   const topVenues = topByOutings(
     entries,
@@ -170,6 +172,22 @@ export default async function Stats() {
                 </li>
               );
             })}
+          </ul>
+        </section>
+      )}
+
+      {guests.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="marquee text-3xl">{t('stats.guests')}</h2>
+          <ul className="flex flex-col">
+            {guests.map((g) => (
+              <li key={g.name} className="flex items-baseline justify-between gap-3 border-b border-border py-2.5 last:border-b-0">
+                <span className="truncate">{g.name}</span>
+                <span className="shrink-0 text-sm text-muted">
+                  {t('stats.guestShows', { count: g.shows })} · {t('stats.guestSongs', { count: g.songs })}
+                </span>
+              </li>
+            ))}
           </ul>
         </section>
       )}

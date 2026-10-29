@@ -143,7 +143,7 @@ export default function LogPage() {
   }
 
   const sections = [
-    <BasicsSection key="basics" form={form} update={update} myFestivals={myFestivals} />,
+    <BasicsSection key="basics" form={form} update={update} myFestivals={myFestivals} editId={editId} />,
     <DetailsSection key="details" form={form} update={update} />,
     <MediaSection key="media" form={form} update={update} />,
     <PeopleSection key="people" form={form} update={update} />,
