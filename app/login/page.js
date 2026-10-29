@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
@@ -14,6 +14,7 @@ function authErrorKey(error) {
   if (error.code === 'weak_password') return 'login.errors.weakPassword';
   if (error.code === 'over_email_send_rate_limit' || error.status === 429) return 'login.errors.rateLimited';
   if (error.code === 'email_not_confirmed') return 'login.errors.notConfirmed';
+  if (error.code === 'signup_disabled') return 'login.errors.signupsClosed';
   // The profile insert trigger fails when the chosen username is taken.
   if (error.message?.includes('Database error saving new user')) return 'login.errors.usernameTaken';
   return 'login.errors.generic';
@@ -31,6 +32,15 @@ export default function Login() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Back from Google with sign-ups switched off (see app/auth/callback).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('error') === 'signups_closed') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setError(t('login.errors.signupsClosed'));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [info, setInfo] = useState('');
 
   const switchMode = (next) => {

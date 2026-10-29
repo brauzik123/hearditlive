@@ -465,6 +465,7 @@ const pl = {
     loginLink: 'Zaloguj się',
     checkEmail: 'Sprawdź e-mail, aby potwierdzić konto, a potem się zaloguj.',
     errors: {
+      signupsClosed: 'Rejestracja jest na razie zamknięta. Istniejące konta mogą się logować.',
       invalidCredentials: 'Nieprawidłowy e-mail lub hasło.',
       emailTaken: 'Konto z tym adresem już istnieje. Zaloguj się.',
       usernameTaken: 'Ta nazwa użytkownika jest zajęta. Wybierz inną.',

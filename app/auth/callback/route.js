@@ -17,5 +17,10 @@ export async function GET(request) {
     }
   }
 
+  // Sign-ups switched off in Supabase: say so on the login page instead of
+  // silently landing back on it.
+  if (searchParams.get('error_code') === 'signup_disabled') {
+    return NextResponse.redirect(`${origin}/login?error=signups_closed`);
+  }
   return NextResponse.redirect(`${origin}/login`);
 }

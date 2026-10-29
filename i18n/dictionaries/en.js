@@ -448,6 +448,7 @@ const en = {
     loginLink: 'Log in',
     checkEmail: 'Check your email to confirm your account, then log in.',
     errors: {
+      signupsClosed: 'Sign-ups are closed for now. Existing accounts can still log in.',
       invalidCredentials: 'Wrong email or password.',
       emailTaken: 'There’s already an account with this email. Log in instead.',
       usernameTaken: 'That username is taken. Try another.',
