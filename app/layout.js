@@ -19,11 +19,19 @@ const body = Instrument_Sans({
   subsets: ['latin', 'latin-ext'],
 });
 
+// Installed on a phone (Add to Home Screen) the app runs full-screen: the
+// page draws under the status bar, so content is padded by the safe areas.
+export const viewport = {
+  themeColor: '#1b1838',
+  viewportFit: 'cover',
+};
+
 export async function generateMetadata() {
   const locale = await getLocale();
   return {
     title: 'Heard It Live',
     description: getDictionary(locale).meta.description,
+    appleWebApp: { title: 'Heard It Live', statusBarStyle: 'black-translucent' },
   };
 }
 
@@ -31,7 +39,7 @@ export default async function RootLayout({ children }) {
   const [locale, dateFormat] = await Promise.all([getLocale(), getDateFormat()]);
   return (
     <html lang={locale} className={`${marquee.variable} ${body.variable}`}>
-      <body className="font-sans pb-20 md:pb-0 md:pt-16">
+      <body className="font-sans pt-[env(safe-area-inset-top)] pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0 md:pt-16">
         <I18nProvider locale={locale} dateFormat={dateFormat} dict={getDictionary(locale)}>
           <ConditionalNavBar />
           {children}
