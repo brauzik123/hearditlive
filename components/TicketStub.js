@@ -8,16 +8,15 @@ import { cityName } from '../utils/placeNames';
 import { billedName } from '../utils/showArtists';
 
 // The app's signature object: one logged show as a paper ticket stub.
-// Main part carries the artist and venue. The torn-off stub leads with the
-// rating when there is one (date small below); otherwise the date, plus the
-// ticket status for upcoming shows.
+// Main part carries the artist and venue. The torn-off stub has the rating
+// (or the ticket status for upcoming shows) on top and the date below.
 //
 // `entry` needs: id, entry_type, event_date, rating, ticket_status, is_support,
 // artists(name), entry_co_artists(...) (see utils/showArtists.js), venues(name, city, cities(name_en, name_pl)). `byline` (e.g. "alice was there") and
 // `meta` (e.g. "2 days ago") are optional, pre-rendered strings. `asLink`
 // is off on the entry's own page, where the ticket is the header.
 export default function TicketStub({ entry, byline, meta, size = 'md', asLink = true }) {
-  const { t, stub, date, locale } = useI18n();
+  const { t, date, locale } = useI18n();
   const artist = billedName(entry) ?? t('common.unknownArtist');
   const venue = [entry.venues?.name, cityName(entry.venues, locale)].filter(Boolean).join(', ');
   const planned = entry.entry_type === 'planned';
@@ -50,51 +49,25 @@ export default function TicketStub({ entry, byline, meta, size = 'md', asLink = 
         )}
       </div>
 
-      <div className="ticket-stub shrink-0 flex flex-col items-center justify-center gap-1 py-3 text-center">
-        {rated ? (
-          // A rated show leads with the rating; the date sits small below it.
-          <>
-            <span
-              className="flex items-center gap-1"
-              aria-label={t('ticket.rating', { stars: formatRating(entry.rating, locale) })}
-            >
-              <Star size={14} className="fill-paper-ink" aria-hidden="true" />
-              <span className="marquee text-4xl leading-none">{formatRating(entry.rating, locale)}</span>
-            </span>
-            <span className="px-1 text-[11px] leading-tight text-paper-muted">
-              {entry.event_date ? date(entry.event_date) : t('ticket.dateTba')}
-            </span>
-          </>
+      {/* The stub: rating on top (a dash when unrated, the ticket status for an
+          upcoming show), the date always small underneath. */}
+      <div className="ticket-stub shrink-0 flex flex-col items-center justify-center gap-1.5 py-3 text-center">
+        {planned ? (
+          <span className="px-1 text-xs font-semibold leading-tight">{t(`ticketStatus.${entry.ticket_status ?? 'interested'}`)}</span>
+        ) : rated ? (
+          <span className="flex items-center gap-1" aria-label={t('ticket.rating', { stars: formatRating(entry.rating, locale) })}>
+            <Star size={14} className="fill-paper-ink" aria-hidden="true" />
+            <span className="marquee text-4xl leading-none">{formatRating(entry.rating, locale)}</span>
+          </span>
         ) : (
-          <>
-            {entry.event_date ? (
-              <StubDate parts={stub(entry.event_date)} />
-            ) : (
-              <span className="marquee text-xl">{t('ticket.dateTba')}</span>
-            )}
-            {planned && (
-              <span className="mt-1 px-1 text-[11px] leading-tight font-semibold">
-                {t(`ticketStatus.${entry.ticket_status ?? 'interested'}`)}
-              </span>
-            )}
-          </>
+          <span className="marquee text-4xl leading-none text-paper-rule" aria-label={t('log.noRating')}>
+            –
+          </span>
         )}
+        <span className="px-1 text-[11px] leading-tight text-paper-muted">
+          {entry.event_date ? date(entry.event_date) : t('ticket.dateTba')}
+        </span>
       </div>
     </Wrapper>
-  );
-}
-
-// Date on the stub, laid out for the preferred format: "3 / Sept / 2024"
-// for the spelled-out format, "03.09 / 2024" style for numeric ones.
-function StubDate({ parts }) {
-  const small = <span className="text-[11px] leading-none text-paper-muted">{parts.small}</span>;
-  const numeric = !parts.middle;
-  return (
-    <>
-      {parts.smallFirst && small}
-      <span className={`marquee ${numeric ? 'text-2xl' : 'text-3xl'}`}>{parts.big}</span>
-      {parts.middle && <span className="text-xs leading-none">{parts.middle}</span>}
-      {!parts.smallFirst && small}
-    </>
   );
 }

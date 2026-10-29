@@ -80,6 +80,14 @@ textarea::placeholder {
   line-height: 0.95;
 }
 
+/* The display face's tails (g, y, p, q) hang below its tight line box, and
+   truncate's overflow:hidden would clip them. Room inside, the same taken
+   back outside, so the layout doesn't move. */
+.marquee.truncate {
+  padding-block: 0.12em;
+  margin-block: -0.12em;
+}
+
 /* The ticket stub. Two half-circle bites at the tear line (set with
    --tear, measured from the left) are cut out with a mask, and the stub
    side gets a dashed perforation. */
