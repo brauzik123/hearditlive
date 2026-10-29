@@ -51,6 +51,12 @@ const en = {
     private: 'Only me',
   },
   home: {
+    thisYear: { one: 'In {year}: {count} event', other: 'In {year}: {count} events' },
+    mostSeen: 'most often {name}',
+    recently: 'Recently',
+    allShows: 'All shows',
+    friendsGoing: 'Friends are going',
+    allFriends: 'All friends',
     statSongs: { one: 'song heard', other: 'songs heard' },
     milestone: '{remaining} more to {target} events',
     onThisDay: 'On this day',

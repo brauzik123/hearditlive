@@ -58,6 +58,12 @@ const pl = {
     private: 'Tylko ja',
   },
   home: {
+    thisYear: { one: 'W {year}: {count} wydarzenie', few: 'W {year}: {count} wydarzenia', many: 'W {year}: {count} wydarzeń', other: 'W {year}: {count} wydarzenia' },
+    mostSeen: 'najczęściej {name}',
+    recently: 'Ostatnio',
+    allShows: 'Wszystkie koncerty',
+    friendsGoing: 'Znajomi wybierają się',
+    allFriends: 'Wszyscy znajomi',
     statSongs: { one: 'usłyszana piosenka', few: 'usłyszane piosenki', many: 'usłyszanych piosenek', other: 'usłyszanej piosenki' },
     milestone: 'Jeszcze {remaining} do {target} wydarzeń',
     onThisDay: 'Tego dnia',
