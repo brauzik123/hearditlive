@@ -22,8 +22,9 @@ export default function SongsGrid({ artists, basePath, owner = null }) {
 
     setSyncingIds((prev) => new Set([...prev, ...toSync.map((a) => a.id)]));
 
-    // A few artists at a time — each sync is a handful of fast Spotify
-    // calls, so this fills the grid quickly without hammering the API.
+    // One artist at a time: a full discography can be dozens of Spotify
+    // calls, and a batch of new artists synced in parallel can trip
+    // Spotify's rate limit (which pauses every sync for a while).
     const queue = [...toSync];
     const worker = async () => {
       while (queue.length) {
@@ -46,7 +47,7 @@ export default function SongsGrid({ artists, basePath, owner = null }) {
         router.refresh();
       }
     };
-    Array.from({ length: 3 }, worker);
+    worker();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artists]);
 
