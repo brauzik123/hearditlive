@@ -73,6 +73,15 @@ export default function OtherProfileView({
         shows={canViewContent ? totalConcerts : null}
         followers={followers}
         following={following}
+        links={
+          canViewContent
+            ? {
+                shows: '#shows',
+                followers: `/u/${profile.username}/follows?tab=followers`,
+                following: `/u/${profile.username}/follows?tab=following`,
+              }
+            : {}
+        }
       />
 
       {togetherEvents > 0 && (
@@ -108,7 +117,7 @@ export default function OtherProfileView({
           </p>
         </div>
       ) : (
-        <section className="flex flex-col gap-3">
+        <section id="shows" className="flex scroll-mt-24 flex-col gap-3">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="marquee text-3xl">{t('profile.concerts')}</h2>
             {/* Collection and Stats each have their own privacy setting. */}

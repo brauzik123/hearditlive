@@ -1,12 +1,14 @@
 'use client';
 
+import Link from 'next/link';
 import Avatar from './Avatar';
 import { useI18n } from '../i18n/client';
 
 // Shared by your own profile and other people's: monogram, name, bio and
 // the three counts. `action` sits beside the name (settings link, follow
 // button…).
-export default function ProfileHeader({ username, avatarUrl, bio, followers, following, shows, action }) {
+// `links` (optional) makes the numbers tappable: { shows, followers, following } hrefs.
+export default function ProfileHeader({ username, avatarUrl, bio, followers, following, shows, action, links = {} }) {
   const { t } = useI18n();
   return (
     <section className="flex flex-col gap-5">
@@ -19,20 +21,31 @@ export default function ProfileHeader({ username, avatarUrl, bio, followers, fol
         </div>
         {action}
       </div>
-      <dl className="flex gap-8">
+      <div className="flex gap-8">
         {[
-          [shows, t('profile.shows', { count: shows ?? 0 })],
-          [followers, t('profile.followers', { count: followers ?? 0 })],
-          [following, t('profile.following', { count: following ?? 0 })],
+          [shows, t('profile.shows', { count: shows ?? 0 }), links.shows],
+          [followers, t('profile.followers', { count: followers ?? 0 }), links.followers],
+          [following, t('profile.following', { count: following ?? 0 }), links.following],
         ]
           .filter(([value]) => value != null)
-          .map(([value, label]) => (
-            <div key={label} className="flex flex-col">
-              <dt className="order-2 text-sm text-muted">{label}</dt>
-              <dd className="marquee order-1 text-3xl">{value}</dd>
-            </div>
-          ))}
-      </dl>
+          .map(([value, label, href]) => {
+            const content = (
+              <>
+                <span className="order-2 text-sm text-muted group-hover:text-foreground">{label}</span>
+                <span className="marquee order-1 text-3xl group-hover:text-brand">{value}</span>
+              </>
+            );
+            return href ? (
+              <Link key={label} href={href} className="group flex flex-col">
+                {content}
+              </Link>
+            ) : (
+              <div key={label} className="flex flex-col">
+                {content}
+              </div>
+            );
+          })}
+      </div>
     </section>
   );
 }

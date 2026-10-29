@@ -267,6 +267,12 @@ const en = {
     lockedFriendsTitle: 'Friends only',
     lockedFriends: 'Only {name}’s friends can see their shows. You become friends when you follow each other.',
   },
+  follows: {
+    followers: 'Followers',
+    following: 'Following',
+    followersEmpty: 'No followers yet.',
+    followingEmpty: 'Not following anyone yet.',
+  },
   friends: {
     addPeople: 'Add people',
     peopleTitle: 'People',

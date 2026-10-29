@@ -274,6 +274,12 @@ const pl = {
     lockedFriendsTitle: 'Tylko dla znajomych',
     lockedFriends: 'Koncerty z profilu {name} widzą tylko znajomi. Zostajecie znajomymi, gdy obserwujecie się nawzajem.',
   },
+  follows: {
+    followers: 'Obserwujący',
+    following: 'Obserwowani',
+    followersEmpty: 'Nikt jeszcze nie obserwuje tego profilu.',
+    followingEmpty: 'Ten profil nikogo jeszcze nie obserwuje.',
+  },
   friends: {
     addPeople: 'Dodaj osoby',
     peopleTitle: 'Osoby',

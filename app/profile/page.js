@@ -57,6 +57,11 @@ export default async function Profile() {
         shows={shows ?? 0}
         followers={followers ?? 0}
         following={following ?? 0}
+        links={{
+          shows: '/collection',
+          followers: `/u/${profile?.username}/follows?tab=followers`,
+          following: `/u/${profile?.username}/follows?tab=following`,
+        }}
         action={
           <Link
             href="/settings"
