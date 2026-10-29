@@ -9,6 +9,7 @@ import TicketStub from '../../components/TicketStub';
 import { formatRating } from '../../utils/rating';
 import { billedName } from '../../utils/showArtists';
 import { summarizeFestivals } from '../../utils/festivals';
+import { hasAnyTag, tagNamesOf } from '../../utils/tags';
 import ErrorScreen from '../../components/ErrorScreen';
 import { cityName } from '../../utils/placeNames';
 
@@ -36,6 +37,7 @@ export default function Collection() {
   const [sort, setSort] = useState('date_desc');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [festivalFilter, setFestivalFilter] = useState([]); // festival names; empty = no filter
+  const [tagFilter, setTagFilter] = useState([]); // your tag names; empty = no filter
 
   useEffect(() => {
     const saved = readSavedView();
@@ -65,7 +67,7 @@ export default function Collection() {
         .select(
           `id, entry_type, event_date, rating, ticket_status, is_support, is_favorite, festival_id,
            artist_id, artists!concert_entries_artist_id_fkey(name, image_url), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, cities(name_en, name_pl)), festivals(name),
-           entry_photos(url, is_cover)`
+           entry_photos(url, is_cover), entry_tags(tags(name))`
         )
         .eq('user_id', user.id)
         .eq('entry_type', 'attended');
@@ -129,6 +131,7 @@ export default function Collection() {
     }
     if (favoritesOnly) list = list.filter((e) => e.is_favorite);
     if (festivalFilter.length) list = list.filter((e) => festivalFilter.includes(e.festivals?.name));
+    if (tagFilter.length) list = list.filter((e) => hasAnyTag(e, tagFilter));
 
     return [...list].sort((a, b) => {
       if (sort === 'date_asc') return (a.event_date ?? '').localeCompare(b.event_date ?? '');
@@ -136,12 +139,13 @@ export default function Collection() {
       if (sort === 'artist_asc') return (billedName(a) ?? '').localeCompare(billedName(b) ?? '');
       return (b.event_date ?? '').localeCompare(a.event_date ?? '');
     });
-  }, [entries, query, sort, favoritesOnly, festivalFilter, locale]);
+  }, [entries, query, sort, favoritesOnly, festivalFilter, tagFilter, locale]);
 
   const festivalNames = useMemo(
     () => [...new Set(entries.map((e) => e.festivals?.name).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [entries]
   );
+  const tagNames = useMemo(() => tagNamesOf(entries), [entries]);
 
   if (loadError) {
     return (
@@ -224,7 +228,23 @@ export default function Collection() {
               {t('collection.favorites')}
             </Chip>
             {festivalNames.length > 0 && (
-              <FestivalFilter names={festivalNames} selected={festivalFilter} onChange={setFestivalFilter} />
+              <ChoiceFilter
+                label={t('collection.festivalFilter')}
+                countLabel={(count) => t('collection.festivalCount', { count })}
+                names={festivalNames}
+                selected={festivalFilter}
+                onChange={setFestivalFilter}
+              />
+            )}
+            {tagNames.length > 0 && (
+              <ChoiceFilter
+                label={t('collection.tagFilter')}
+                countLabel={(count) => t('collection.tagCount', { count })}
+                names={tagNames}
+                selected={tagFilter}
+                onChange={setTagFilter}
+                format={(name) => `#${name}`}
+              />
             )}
           </div>
         </div>
@@ -362,7 +382,8 @@ function FestivalsButton({ entries }) {
   );
 }
 
-function FestivalFilter({ names, selected, onChange }) {
+// A dropdown of checkboxes (festivals, tags): "Label: All" until you pick.
+function ChoiceFilter({ label, countLabel, names, selected, onChange, format = (name) => name }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -384,10 +405,10 @@ function FestivalFilter({ names, selected, onChange }) {
   const toggle = (name) => onChange(selected.includes(name) ? selected.filter((n) => n !== name) : [...selected, name]);
   const summary =
     selected.length === 0
-      ? t('collection.festivalAll')
+      ? t('collection.filterAll')
       : selected.length === 1
-        ? selected[0]
-        : t('collection.festivalCount', { count: selected.length });
+        ? format(selected[0])
+        : countLabel(selected.length);
 
   return (
     <div ref={ref} className="relative">
@@ -400,7 +421,7 @@ function FestivalFilter({ names, selected, onChange }) {
         }`}
       >
         <span className="truncate">
-          {t('collection.festivalFilter')}: {summary}
+          {label}: {summary}
         </span>
         <ChevronDown size={14} className="shrink-0" />
       </button>
@@ -408,10 +429,10 @@ function FestivalFilter({ names, selected, onChange }) {
         <div className="absolute left-0 z-30 mt-2 w-64 rounded-xl border border-border bg-surface p-2 shadow-[0_12px_32px_-12px_rgba(0,0,0,0.6)]">
           <div className="flex justify-between gap-2 border-b border-border px-1 pb-2">
             <button type="button" onClick={() => onChange(names)} className="text-sm font-medium text-brand">
-              {t('collection.festivalSelectAll')}
+              {t('collection.filterSelectAll')}
             </button>
             <button type="button" onClick={() => onChange([])} className="text-sm text-muted hover:text-foreground">
-              {t('collection.festivalClear')}
+              {t('collection.filterClear')}
             </button>
           </div>
           <ul className="max-h-64 overflow-y-auto pt-1">
@@ -429,7 +450,7 @@ function FestivalFilter({ names, selected, onChange }) {
                     >
                       {checked && <Check size={12} strokeWidth={3} />}
                     </span>
-                    <span className="truncate">{name}</span>
+                    <span className="truncate">{format(name)}</span>
                   </label>
                 </li>
               );

@@ -8,18 +8,20 @@ import { cityName } from '../utils/placeNames';
 import { billedName } from '../utils/showArtists';
 
 // The app's signature object: one logged show as a paper ticket stub.
-// Main part carries the artist and venue; the torn-off stub carries the
-// date (or ticket status for upcoming shows) and the rating.
+// Main part carries the artist and venue. The torn-off stub leads with the
+// rating when there is one (date small below); otherwise the date, plus the
+// ticket status for upcoming shows.
 //
 // `entry` needs: id, entry_type, event_date, rating, ticket_status, is_support,
 // artists(name), entry_co_artists(...) (see utils/showArtists.js), venues(name, city, cities(name_en, name_pl)). `byline` (e.g. "alice was there") and
 // `meta` (e.g. "2 days ago") are optional, pre-rendered strings. `asLink`
 // is off on the entry's own page, where the ticket is the header.
 export default function TicketStub({ entry, byline, meta, size = 'md', asLink = true }) {
-  const { t, stub, locale } = useI18n();
+  const { t, stub, date, locale } = useI18n();
   const artist = billedName(entry) ?? t('common.unknownArtist');
   const venue = [entry.venues?.name, cityName(entry.venues, locale)].filter(Boolean).join(', ');
   const planned = entry.entry_type === 'planned';
+  const rated = !planned && entry.rating != null;
   const large = size === 'lg';
   const Wrapper = asLink ? Link : 'div';
 
@@ -49,21 +51,33 @@ export default function TicketStub({ entry, byline, meta, size = 'md', asLink = 
       </div>
 
       <div className="ticket-stub shrink-0 flex flex-col items-center justify-center gap-1 py-3 text-center">
-        {entry.event_date ? (
-          <StubDate parts={stub(entry.event_date)} />
-        ) : (
-          <span className="marquee text-xl">{t('ticket.dateTba')}</span>
-        )}
-        {planned ? (
-          <span className="mt-1 px-1 text-[11px] leading-tight font-semibold">
-            {t(`ticketStatus.${entry.ticket_status ?? 'interested'}`)}
-          </span>
-        ) : (
-          entry.rating != null && (
-            <span className="mt-1 flex items-center gap-0.5 text-sm font-bold" aria-label={t('ticket.rating', { stars: formatRating(entry.rating, locale) })}>
-              <Star size={12} className="fill-paper-ink" /> {formatRating(entry.rating, locale)}
+        {rated ? (
+          // A rated show leads with the rating; the date sits small below it.
+          <>
+            <span
+              className="flex items-center gap-1"
+              aria-label={t('ticket.rating', { stars: formatRating(entry.rating, locale) })}
+            >
+              <Star size={14} className="fill-paper-ink" aria-hidden="true" />
+              <span className="marquee text-4xl leading-none">{formatRating(entry.rating, locale)}</span>
             </span>
-          )
+            <span className="px-1 text-[11px] leading-tight text-paper-muted">
+              {entry.event_date ? date(entry.event_date) : t('ticket.dateTba')}
+            </span>
+          </>
+        ) : (
+          <>
+            {entry.event_date ? (
+              <StubDate parts={stub(entry.event_date)} />
+            ) : (
+              <span className="marquee text-xl">{t('ticket.dateTba')}</span>
+            )}
+            {planned && (
+              <span className="mt-1 px-1 text-[11px] leading-tight font-semibold">
+                {t(`ticketStatus.${entry.ticket_status ?? 'interested'}`)}
+              </span>
+            )}
+          </>
         )}
       </div>
     </Wrapper>
