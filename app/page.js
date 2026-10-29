@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
+import { ChevronRight, Flag, Plus, Users } from 'lucide-react';
 import { createClient } from '../utils/supabase/server';
 import { getI18n } from '../i18n/server';
 import TicketStub from '../components/TicketStub';
@@ -7,8 +7,8 @@ import PastPlans from '../components/PastPlans';
 import TaggedShows from '../components/TaggedShows';
 import { countOutings } from '../utils/outings';
 import { checked } from '../utils/checked';
-
-const ENTRY_FIELDS = 'id, entry_type, event_date, rating, ticket_status, is_support, created_at, artists!concert_entries_artist_id_fkey(name), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, cities(name_en, name_pl))';
+import { TICKET_FIELDS as ENTRY_FIELDS } from '../utils/entryFields';
+import { daysBefore, nextMilestone, onThisDay } from '../utils/home';
 
 export default async function Home() {
   const supabase = await createClient();
@@ -52,19 +52,32 @@ export default async function Home() {
       .limit(3),
   ])).map(checked);
 
-  // Activity feed: latest entries from people you follow. Visibility is
-  // enforced by the database (private profiles, friends-only entries), so
-  // this only ever returns what you're allowed to see.
+  // Friends' activity lives on the Friends page; Home only says how much
+  // is new this week. Visibility is enforced by the database.
   const followedIds = (followRows ?? []).map((f) => f.followee_id);
-  const { data: feedRows } = followedIds.length
-    ? checked(await supabase
-        .from('concert_entries')
-        .select(`${ENTRY_FIELDS}, profiles!concert_entries_user_id_fkey(username)`)
-        .in('user_id', followedIds)
-        .order('created_at', { ascending: false })
-        .limit(20))
-    : { data: [] };
-  const feed = feedRows ?? [];
+  const weekAgo = daysBefore(today, 7);
+  // Shows from today's date in earlier years ("on this day").
+  const memories = onThisDay(attended ?? [], today).slice(0, 2);
+  const [{ count: friendsNew }, { count: songsHeard }, { data: memoryRows }] = (await Promise.all([
+    followedIds.length
+      ? supabase
+          .from('concert_entries')
+          .select('id', { count: 'exact', head: true })
+          .in('user_id', followedIds)
+          .gte('created_at', weekAgo)
+      : Promise.resolve({ count: 0 }),
+    supabase
+      .from('entry_setlist')
+      .select('id, concert_entries!inner(user_id, entry_type)', { count: 'exact', head: true })
+      .eq('concert_entries.user_id', user.id)
+      .eq('concert_entries.entry_type', 'attended'),
+    memories.length
+      ? supabase.from('concert_entries').select(ENTRY_FIELDS).in('id', memories.map((m) => m.id))
+      : Promise.resolve({ data: [] }),
+  ])).map(checked);
+  const memoryEntries = memories
+    .map((m) => ({ ...(memoryRows ?? []).find((e) => e.id === m.id), yearsAgo: m.yearsAgo }))
+    .filter((e) => e.id);
 
   // Friends' shows you were marked at and haven't logged yet: not copied
   // already, and nothing of yours by the same artist on that date.
@@ -106,6 +119,7 @@ export default async function Home() {
   const lastShow = lastShowRows?.[0];
   const heroEntry = nextShow ?? lastShow;
   const isNewHere = shows === 0 && !nextShow;
+  const milestone = nextMilestone(shows);
 
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-10 px-4 py-6 md:py-10">
@@ -127,43 +141,48 @@ export default async function Home() {
         <section className="flex flex-col gap-3">
           <h1 className="text-sm font-medium text-muted">{nextShow ? t('home.nextUp') : t('home.lastShow')}</h1>
           <TicketStub entry={heroEntry} size="lg" />
-          <Link href="/stats" className="group mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-            <Stat value={shows} label={t('home.statEvents', { count: shows })} />
-            <Stat value={artists} label={t('home.statArtists', { count: artists })} />
-            <Stat value={cities} label={t('home.statCities', { count: cities })} />
-            <span className="text-sm text-muted underline-offset-4 group-hover:text-foreground group-hover:underline">
-              {t('home.allStats')}
+          {/* A peek at Stats; the whole strip opens it. */}
+          <Link href="/stats" className="group mt-2 flex flex-col gap-2 rounded-xl border border-border p-3 transition hover:border-brand">
+            <span className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+              <Stat value={shows} label={t('home.statEvents', { count: shows })} />
+              <Stat value={artists} label={t('home.statArtists', { count: artists })} />
+              <Stat value={songsHeard ?? 0} label={t('home.statSongs', { count: songsHeard ?? 0 })} />
+              <Stat value={cities} label={t('home.statCities', { count: cities })} />
+            </span>
+            <span className="flex items-center justify-between gap-2 text-xs text-muted">
+              <span className="flex items-center gap-1.5">
+                <Flag size={13} className="text-brand" />
+                {t('home.milestone', { remaining: milestone.remaining, target: milestone.target, count: milestone.remaining })}
+              </span>
+              <ChevronRight size={15} className="shrink-0 transition group-hover:translate-x-0.5" />
             </span>
           </Link>
         </section>
       )}
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between">
-          <h2 className="marquee text-3xl">{t('home.feedTitle')}</h2>
-          <Link href="/friends" className="shrink-0 whitespace-nowrap text-sm text-muted hover:text-foreground">
-            {t('home.findFriends')}
-          </Link>
-        </div>
-        {feed.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border px-5 py-8 text-center text-sm text-muted">
-            {followedIds.length === 0 ? t('home.feedEmptyNoFollows') : t('home.feedEmpty')}
-          </p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {feed.map((entry) => (
-              <TicketStub
-                key={entry.id}
-                entry={entry}
-                byline={t(entry.entry_type === 'planned' ? 'home.bylinePlanned' : 'home.bylineAttended', {
-                  name: entry.profiles?.username,
-                })}
-                meta={ago(entry.created_at)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+      {memoryEntries.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="marquee text-3xl">{t('home.onThisDay')}</h2>
+          {memoryEntries.map((entry) => (
+            <TicketStub key={entry.id} entry={entry} meta={t('home.yearsAgo', { count: entry.yearsAgo })} />
+          ))}
+        </section>
+      )}
+
+      <Link
+        href="/friends"
+        className="group flex items-center gap-3 rounded-xl border border-border px-4 py-3 transition hover:border-brand"
+      >
+        <Users size={18} className="shrink-0 text-brand" />
+        <span className="flex-1 text-sm">
+          {followedIds.length === 0
+            ? t('home.friendsCardNone')
+            : friendsNew > 0
+              ? t('home.friendsCardNew', { count: friendsNew })
+              : t('home.friendsCardQuiet')}
+        </span>
+        <ChevronRight size={16} className="shrink-0 text-muted transition group-hover:translate-x-0.5" />
+      </Link>
 
       {laterShows.length > 0 && (
         <section className="flex flex-col gap-3">
