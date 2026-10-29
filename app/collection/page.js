@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Search, List, Image as ImageIcon, Star, Loader2, Music2, ChevronDown, Check, RotateCw } from 'lucide-react';
+import { Search, List, Image as ImageIcon, Star, Loader2, Music2, ChevronDown, Check, RotateCw, Tent } from 'lucide-react';
 import { createClient } from '../../utils/supabase/client';
 import { useI18n } from '../../i18n/client';
 import TicketStub from '../../components/TicketStub';
@@ -168,7 +168,10 @@ export default function Collection() {
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="marquee text-5xl">{t('collection.title')}</h1>
-          <p className="mt-1 text-sm text-muted">{t('collection.count', { count: entries.length })}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="text-sm text-muted">{t('collection.count', { count: entries.length })}</p>
+            <FestivalsButton entries={entries} />
+          </div>
         </div>
         <div role="tablist" aria-label={t('collection.view')} className="flex rounded-full border border-border p-1">
           {[
@@ -296,6 +299,78 @@ function Chip({ active, onClick, children }) {
 
 // "Festival: …" dropdown with a checkbox per festival the user has logged.
 // Nothing ticked means no festival filter at all.
+// Your festivals, one tap away: each with how many editions and sets, and
+// a link to its page. Built from the shows already loaded.
+function FestivalsButton({ entries }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => {
+      if (!ref.current?.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const festivals = useMemo(() => {
+    const byId = new Map();
+    for (const e of entries) {
+      if (!e.festival_id) continue;
+      if (!byId.has(e.festival_id)) byId.set(e.festival_id, { id: e.festival_id, name: e.festivals?.name ?? '', years: new Set(), sets: 0 });
+      const festival = byId.get(e.festival_id);
+      festival.sets += 1;
+      if (e.event_date) festival.years.add(e.event_date.slice(0, 4));
+    }
+    return [...byId.values()].sort((a, b) => b.years.size - a.years.size || b.sets - a.sets || a.name.localeCompare(b.name));
+  }, [entries]);
+
+  if (!festivals.length) return null;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition ${
+          open ? 'border-brand text-foreground' : 'border-border text-muted hover:border-brand hover:text-foreground'
+        }`}
+      >
+        <Tent size={14} /> {t('collection.festivals')}
+        <span className="text-xs text-brand">{festivals.length}</span>
+      </button>
+      {open && (
+        <div className="absolute left-0 z-30 mt-2 w-72 rounded-xl border border-border bg-surface p-2 shadow-[0_12px_32px_-12px_rgba(0,0,0,0.6)]">
+          <ul className="max-h-72 overflow-y-auto">
+            {festivals.map((f) => (
+              <li key={f.id}>
+                <Link
+                  href={`/festival/${f.id}`}
+                  className="flex items-baseline justify-between gap-3 rounded-lg px-2.5 py-2 text-sm hover:bg-surface-light"
+                >
+                  <span className="truncate font-medium">{f.name}</span>
+                  <span className="shrink-0 text-xs text-muted">
+                    {f.years.size > 1 && <>{t('festival.editions', { count: f.years.size })}, </>}
+                    {t('festival.sets', { count: f.sets })}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FestivalFilter({ names, selected, onChange }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);

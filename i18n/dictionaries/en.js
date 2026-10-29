@@ -82,6 +82,7 @@ const en = {
     emptyCta: 'Log your first show',
   },
   collection: {
+    festivals: 'Festivals',
     title: 'Shows',
     count: { one: '{count} show', other: '{count} shows' },
     view: 'View',

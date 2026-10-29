@@ -89,6 +89,7 @@ const pl = {
     emptyCta: 'Dodaj pierwszy koncert',
   },
   collection: {
+    festivals: 'Festiwale',
     title: 'Koncerty',
     count: { one: '{count} koncert', few: '{count} koncerty', many: '{count} koncertów', other: '{count} koncertu' },
     view: 'Widok',
