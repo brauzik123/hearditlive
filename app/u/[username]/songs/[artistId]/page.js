@@ -13,7 +13,7 @@ export default async function UserArtistSongsPage({ params }) {
   const access = await getProfileAccess(supabase, username);
   if (!access) notFound();
   if (access.isSelf) redirect(`/songs/${artistId}`);
-  if (!access.canViewContent) redirect(`/u/${access.profile.username}`);
+  if (!access.canViewSongs) redirect(`/u/${access.profile.username}`);
 
   const { profile } = access;
   const data = await getArtistSongs(supabase, profile.id, artistId);

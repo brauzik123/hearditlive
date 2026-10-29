@@ -12,7 +12,7 @@ export default async function UserSongsPage({ params }) {
   if (!access) notFound();
   if (access.isSelf) redirect('/songs');
   // The profile page explains why it's locked (private vs friends-only).
-  if (!access.canViewContent) redirect(`/u/${access.profile.username}`);
+  if (!access.canViewSongs) redirect(`/u/${access.profile.username}`);
 
   const { profile } = access;
   const artists = await getSongsOverview(supabase, profile.id);

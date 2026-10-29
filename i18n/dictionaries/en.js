@@ -293,6 +293,9 @@ const en = {
     followBack: 'Follow back',
   },
   settings: {
+    whoSeesSongs: 'Who can see your Collection',
+    whoSeesStats: 'Who can see your Stats',
+    pagesVisibilityHint: 'Never more open than your profile: on a friends-only profile, “Anyone” still means friends only.',
     title: 'Settings',
     profile: 'Profile',
     username: 'Username',
@@ -372,6 +375,7 @@ const en = {
     noSongs: 'No songs here.',
   },
   stats: {
+    lineupTitleOf: '{name}’s lineup',
     guests: 'Guests on stage',
     guestShows: { one: 'at {count} show', other: 'at {count} shows' },
     guestSongs: { one: '{count} song', other: '{count} songs' },

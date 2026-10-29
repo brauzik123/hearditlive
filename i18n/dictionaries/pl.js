@@ -300,6 +300,9 @@ const pl = {
     followBack: 'Obserwuj też',
   },
   settings: {
+    whoSeesSongs: 'Kto widzi Twoją Kolekcję',
+    whoSeesStats: 'Kto widzi Twoje Statystyki',
+    pagesVisibilityHint: 'Nigdy szerzej niż profil: przy profilu tylko dla znajomych „Wszyscy” nadal oznacza tylko znajomych.',
     title: 'Ustawienia',
     profile: 'Profil',
     username: 'Nazwa użytkownika',
@@ -384,6 +387,7 @@ const pl = {
     noSongs: 'Brak piosenek.',
   },
   stats: {
+    lineupTitleOf: 'Line-up: {name}',
     guests: 'Goście na scenie',
     guestShows: { one: 'na {count} koncercie', few: 'na {count} koncertach', many: 'na {count} koncertach', other: 'na {count} koncertu' },
     guestSongs: { one: '{count} utwór', few: '{count} utwory', many: '{count} utworów', other: '{count} utworu' },

@@ -11,7 +11,7 @@ export default async function OtherProfilePage({ params }) {
 
   const access = await getProfileAccess(supabase, username);
   if (!access) notFound();
-  const { viewer, profile, isSelf, canViewContent } = access;
+  const { viewer, profile, isSelf, canViewContent, canViewSongs, canViewStats } = access;
 
   const [{ count: followers }, { count: following }, { data: viewerFollowRow }] = await Promise.all([
     supabase
@@ -78,6 +78,8 @@ export default async function OtherProfilePage({ params }) {
       following={following ?? 0}
       initialFollowStatus={viewerFollowRow?.status ?? null}
       canViewContent={canViewContent}
+      canViewSongs={canViewSongs}
+      canViewStats={canViewStats}
       totalConcerts={totalConcerts}
       concerts={concerts}
       togetherEvents={togetherEvents}

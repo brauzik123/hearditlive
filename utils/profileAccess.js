@@ -1,4 +1,12 @@
 import { checked } from './checked';
+
+// Whether a viewer passes every one of these visibility levels (public,
+// friends, private). A page's own setting can only narrow the profile's.
+export function visibleTo(levels, { isSelf, isFriend }) {
+  if (isSelf) return true;
+  return levels.every((level) => level === 'public' || (level === 'friends' && isFriend));
+}
+
 // Who's looking at whose profile, and whether they may see its content.
 // Mirrors the database rule (entry_visible_to_viewer): public profiles are
 // open, friends-only needs a mutual follow, private is owner-only. The
@@ -14,7 +22,7 @@ export async function getProfileAccess(supabase, username) {
   const { data: profile } = checked(
     await supabase
     .from('profiles')
-    .select('id, username, bio, avatar_url, profile_visibility')
+    .select('id, username, bio, avatar_url, profile_visibility, songs_visibility, stats_visibility')
     .ilike('username', pattern)
     .maybeSingle()
   );
@@ -32,8 +40,11 @@ export async function getProfileAccess(supabase, username) {
     isFriend = !!data;
   }
 
-  const canViewContent =
-    isSelf || profile.profile_visibility === 'public' || (profile.profile_visibility === 'friends' && isFriend);
+  const who = { isSelf, isFriend };
+  const canViewContent = visibleTo([profile.profile_visibility], who);
+  // Collection (songs heard) and Stats each have their own setting too.
+  const canViewSongs = visibleTo([profile.profile_visibility, profile.songs_visibility ?? 'public'], who);
+  const canViewStats = visibleTo([profile.profile_visibility, profile.stats_visibility ?? 'public'], who);
 
-  return { viewer, profile, isSelf, isFriend, canViewContent };
+  return { viewer, profile, isSelf, isFriend, canViewContent, canViewSongs, canViewStats };
 }

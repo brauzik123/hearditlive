@@ -32,6 +32,8 @@ export default function Settings() {
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [profileVisibility, setProfileVisibility] = useState('public');
   const [defaultEntryVisibility, setDefaultEntryVisibility] = useState('public');
+  const [songsVisibility, setSongsVisibility] = useState('public');
+  const [statsVisibility, setStatsVisibility] = useState('public');
   const [hideMediaDefault, setHideMediaDefault] = useState(false);
 
   useEffect(() => {
@@ -45,7 +47,7 @@ export default function Settings() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username, bio, avatar_url, profile_visibility, default_entry_visibility, hide_entry_media_default')
+        .select('username, bio, avatar_url, profile_visibility, default_entry_visibility, hide_entry_media_default, songs_visibility, stats_visibility')
         .eq('id', user.id)
         .single();
 
@@ -55,6 +57,8 @@ export default function Settings() {
         setAvatarUrl(profile.avatar_url ?? null);
         setProfileVisibility(profile.profile_visibility ?? 'public');
         setDefaultEntryVisibility(profile.default_entry_visibility ?? 'public');
+        setSongsVisibility(profile.songs_visibility ?? 'public');
+        setStatsVisibility(profile.stats_visibility ?? 'public');
         setHideMediaDefault(!!profile.hide_entry_media_default);
       }
       setLoading(false);
@@ -81,6 +85,8 @@ export default function Settings() {
         bio: bio.trim() || null,
         profile_visibility: profileVisibility,
         default_entry_visibility: defaultEntryVisibility,
+        songs_visibility: songsVisibility,
+        stats_visibility: statsVisibility,
         hide_entry_media_default: hideMediaDefault,
       })
       .eq('id', user.id);
@@ -173,6 +179,26 @@ export default function Settings() {
             ))}
           </div>
         </fieldset>
+
+        {/* Collection and Stats pages: can only be stricter than the profile. */}
+        <div className="flex flex-col gap-1.5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {[
+              { label: t('settings.whoSeesSongs'), value: songsVisibility, set: setSongsVisibility },
+              { label: t('settings.whoSeesStats'), value: statsVisibility, set: setStatsVisibility },
+            ].map((setting) => (
+              <label key={setting.label} className="flex flex-col gap-1.5 text-sm">
+                <span className="text-muted">{setting.label}</span>
+                <select className="field" value={setting.value} onChange={(e) => setting.set(e.target.value)}>
+                  <option value="public">{t('visibility.public')}</option>
+                  <option value="friends">{t('visibility.friends')}</option>
+                  <option value="private">{t('visibility.private')}</option>
+                </select>
+              </label>
+            ))}
+          </div>
+          <span className="text-xs text-muted">{t('settings.pagesVisibilityHint')}</span>
+        </div>
 
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="text-muted">{t('settings.defaultEntryVisibility')}</span>

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Lock, Clock, UserPlus, UserMinus, Music2, Ticket } from 'lucide-react';
+import { Lock, Clock, UserPlus, UserMinus, Music2, Ticket, BarChart3 } from 'lucide-react';
 import { createClient } from '../utils/supabase/client';
 import { useI18n } from '../i18n/client';
 import ProfileHeader from './ProfileHeader';
@@ -22,6 +22,8 @@ export default function OtherProfileView({
   following,
   initialFollowStatus,
   canViewContent,
+  canViewSongs = false,
+  canViewStats = false,
   totalConcerts,
   togetherEvents = 0,
   concerts,
@@ -109,12 +111,25 @@ export default function OtherProfileView({
         <section className="flex flex-col gap-3">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="marquee text-3xl">{t('profile.concerts')}</h2>
-            <Link
-              href={isSelf ? '/songs' : `/u/${profile.username}/songs`}
-              className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm transition hover:border-brand"
-            >
-              <Music2 size={14} /> {t('profile.songsHeard')}
-            </Link>
+            {/* Collection and Stats each have their own privacy setting. */}
+            <div className="flex shrink-0 gap-2">
+              {canViewSongs && (
+                <Link
+                  href={isSelf ? '/songs' : `/u/${profile.username}/songs`}
+                  className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm transition hover:border-brand"
+                >
+                  <Music2 size={14} /> {t('nav.songs')}
+                </Link>
+              )}
+              {canViewStats && (
+                <Link
+                  href={isSelf ? '/stats' : `/u/${profile.username}/stats`}
+                  className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm transition hover:border-brand"
+                >
+                  <BarChart3 size={14} /> {t('nav.stats')}
+                </Link>
+              )}
+            </div>
           </div>
           {concerts.length === 0 ? (
             <p className="text-sm text-muted">{t('profile.concertsEmpty', { name: profile.username })}</p>
