@@ -1,3 +1,6 @@
+import { countOutings } from './outings';
+import { rankArtists } from './lineup';
+
 // Small pieces of Home: the next round number to reach, and shows from
 // today's date in earlier years.
 
@@ -26,4 +29,20 @@ export function daysBefore(isoDate, days) {
   const date = new Date(`${isoDate}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() - days);
   return date.toISOString().slice(0, 10);
+}
+
+// This calendar year so far: events (festival editions and nights count
+// once, like Stats) and the artist you saw most, or null.
+export function thisYearSummary(entries, year) {
+  const thisYear = entries.filter((e) => e.event_date?.startsWith(String(year)));
+  return { events: countOutings(thisYear), top: rankArtists(thisYear)[0] ?? null };
+}
+
+// Friends' shows you were tagged at that still need an answer: not copied
+// into your log yet, and nothing of yours by the same artist on that date.
+// copies: your entries' copied_from; sameDay: your { event_date, artist_id }.
+export function pendingTags(tagged, copies, sameDay) {
+  const copied = new Set(copies.map((c) => c.copied_from));
+  const logged = new Set(sameDay.map((e) => `${e.event_date}:${e.artist_id}`));
+  return tagged.filter((e) => !copied.has(e.id) && !logged.has(`${e.event_date}:${e.artist_id}`));
 }

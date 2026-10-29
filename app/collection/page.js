@@ -8,6 +8,7 @@ import { useI18n } from '../../i18n/client';
 import TicketStub from '../../components/TicketStub';
 import { formatRating } from '../../utils/rating';
 import { billedName } from '../../utils/showArtists';
+import { summarizeFestivals } from '../../utils/festivals';
 import ErrorScreen from '../../components/ErrorScreen';
 import { cityName } from '../../utils/placeNames';
 
@@ -320,17 +321,7 @@ function FestivalsButton({ entries }) {
     };
   }, [open]);
 
-  const festivals = useMemo(() => {
-    const byId = new Map();
-    for (const e of entries) {
-      if (!e.festival_id) continue;
-      if (!byId.has(e.festival_id)) byId.set(e.festival_id, { id: e.festival_id, name: e.festivals?.name ?? '', years: new Set(), sets: 0 });
-      const festival = byId.get(e.festival_id);
-      festival.sets += 1;
-      if (e.event_date) festival.years.add(e.event_date.slice(0, 4));
-    }
-    return [...byId.values()].sort((a, b) => b.years.size - a.years.size || b.sets - a.sets || a.name.localeCompare(b.name));
-  }, [entries]);
+  const festivals = useMemo(() => summarizeFestivals(entries), [entries]);
 
   if (!festivals.length) return null;
 
@@ -358,7 +349,7 @@ function FestivalsButton({ entries }) {
                 >
                   <span className="truncate font-medium">{f.name}</span>
                   <span className="shrink-0 text-xs text-muted">
-                    {f.years.size > 1 && <>{t('festival.editions', { count: f.years.size })}, </>}
+                    {f.editions > 1 && <>{t('festival.editions', { count: f.editions })}, </>}
                     {t('festival.sets', { count: f.sets })}
                   </span>
                 </Link>

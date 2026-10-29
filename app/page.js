@@ -9,8 +9,7 @@ import TaggedShows from '../components/TaggedShows';
 import { countOutings } from '../utils/outings';
 import { checked } from '../utils/checked';
 import { TICKET_FIELDS as ENTRY_FIELDS } from '../utils/entryFields';
-import { daysBefore, nextMilestone, onThisDay } from '../utils/home';
-import { rankArtists } from '../utils/lineup';
+import { daysBefore, nextMilestone, onThisDay, pendingTags, thisYearSummary } from '../utils/home';
 import { groupFriendShows } from '../utils/friendShows';
 import FriendShowRow from './friends/_components/FriendShowRow';
 
@@ -112,9 +111,7 @@ export default async function Home() {
         ? supabase.from('concert_entries').select('event_date, artist_id').eq('user_id', user.id).in('event_date', dates)
         : Promise.resolve({ data: [] }),
     ])).map(checked);
-    const copied = new Set((copies ?? []).map((c) => c.copied_from));
-    const logged = new Set((sameDay ?? []).map((e) => `${e.event_date}:${e.artist_id}`));
-    tagged = taggedAll.filter((e) => !copied.has(e.id) && !logged.has(`${e.event_date}:${e.artist_id}`));
+    tagged = pendingTags(taggedAll, copies ?? [], sameDay ?? []);
   }
 
   // Festivals count once per year, like the Stats page.
@@ -151,9 +148,7 @@ export default async function Home() {
 
   // This year so far: events and who you saw most.
   const year = today.slice(0, 4);
-  const thisYear = (attended ?? []).filter((e) => e.event_date?.startsWith(year));
-  const topThisYear = rankArtists(thisYear)[0] ?? null;
-  const eventsThisYear = countOutings(thisYear);
+  const { events: eventsThisYear, top: topThisYear } = thisYearSummary(attended ?? [], year);
 
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-10 px-4 py-6 md:py-10">

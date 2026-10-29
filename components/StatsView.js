@@ -9,6 +9,7 @@ import { checked } from '../utils/checked';
 import { billing, LINEUP_SIZE, rankArtists } from '../utils/lineup';
 import { togetherCounts } from '../utils/together';
 import { guestAppearances } from '../utils/guests';
+import { summarizeFestivals } from '../utils/festivals';
 import Avatar from './Avatar';
 
 function topCounts(items, keyFn, limit) {
@@ -79,18 +80,7 @@ export default async function StatsView({ userId, owner = null }) {
   );
   const topCities = topByOutings(entries, cityKey, (e) => cityName(e.venues, locale), 5);
 
-  // Festivals: editions (distinct years) and sets seen at each.
-  const festivalMap = new Map();
-  for (const e of entries) {
-    if (!e.festival_id) continue;
-    if (!festivalMap.has(e.festival_id)) {
-      festivalMap.set(e.festival_id, { id: e.festival_id, name: e.festivals?.name ?? '', years: new Set(), sets: 0 });
-    }
-    const f = festivalMap.get(e.festival_id);
-    f.sets += 1;
-    if (e.event_date) f.years.add(e.event_date.slice(0, 4));
-  }
-  const festivals = [...festivalMap.values()].sort((a, b) => b.years.size - a.years.size || b.sets - a.sets);
+  const festivals = summarizeFestivals(entries);
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-12 px-4 py-6 md:py-10">
@@ -139,7 +129,7 @@ export default async function StatsView({ userId, owner = null }) {
                 <Link href={`/festival/${f.id}${owner ? `?u=${owner.username}` : ''}`} className="flex items-baseline justify-between gap-3 py-2.5 hover:text-brand">
                   <span className="truncate">{f.name}</span>
                   <span className="shrink-0 text-sm text-muted">
-                    {f.years.size > 1 && <>{t('festival.editions', { count: f.years.size })}, </>}
+                    {f.editions > 1 && <>{t('festival.editions', { count: f.editions })}, </>}
                     {t('festival.sets', { count: f.sets })}
                   </span>
                 </Link>
