@@ -39,7 +39,7 @@ function usedKeys() {
     'profile.visibilityNote': ['friends', 'private'],
     visibility: ['public', 'friends', 'private'],
     'settings.visibilityHint': ['public', 'friends', 'private'],
-    nav: ['home', 'collection', 'songs', 'profile', 'log'],
+    nav: ['home', 'collection', 'songs', 'stats', 'profile', 'log'],
     'profile.follow': ['none', 'pending', 'following'],
     ticketStatus: ['interested', 'bought', 'not_yet'],
     'settings.dateFormats': ['long', 'dmy', 'mdy', 'iso'],

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Ticket, User, Plus, Music2 } from 'lucide-react';
+import { Home, Ticket, User, Plus, Music2, BarChart3 } from 'lucide-react';
 import { createClient } from '../utils/supabase/client';
 import { useI18n } from '../i18n/client';
 
@@ -11,6 +11,7 @@ const LINKS = [
   { href: '/', key: 'home', icon: Home },
   { href: '/collection', key: 'collection', icon: Ticket },
   { href: '/songs', key: 'songs', icon: Music2 },
+  { href: '/stats', key: 'stats', icon: BarChart3 },
   { href: '/profile', key: 'profile', icon: User },
 ];
 
@@ -96,7 +97,7 @@ export default function NavBar() {
         </Link>
       </div>
 
-      {/* Mobile tab bar: two tabs, the log button, two tabs */}
+      {/* Mobile tab bar: two tabs, the log button, three tabs */}
       <div className="flex md:hidden items-end justify-around px-2 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
         {[...LINKS.slice(0, 2), null, ...LINKS.slice(2)].map((link) => {
           if (!link) {
@@ -118,13 +119,13 @@ export default function NavBar() {
               key={href}
               href={href}
               aria-current={active ? 'page' : undefined}
-              className={`flex w-16 flex-col items-center gap-1 py-1 ${active ? 'text-foreground' : 'text-muted'}`}
+              className={`flex w-14 flex-col items-center gap-1 py-1 ${active ? 'text-foreground' : 'text-muted'}`}
             >
               <span className="relative">
                 <Icon size={22} strokeWidth={active ? 2.25 : 1.75} />
                 {href === '/profile' && <Badge count={pendingRequests} label={badgeLabel} />}
               </span>
-              <span className="text-[11px]">{t(`nav.${key}`)}</span>
+              <span className="max-w-full truncate text-[11px]">{t(`nav.${key}`)}</span>
             </Link>
           );
         })}

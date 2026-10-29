@@ -14,7 +14,8 @@ export default function ProfileHeader({ username, avatarUrl, bio, followers, fol
         <Avatar username={username} src={avatarUrl} size={72} />
         <div className="min-w-0 flex-1">
           <h1 className="marquee truncate text-5xl">{username}</h1>
-          {bio && <p className="mt-1 text-sm text-muted">{bio}</p>}
+          {/* overflow-wrap: anywhere, so a long unbroken word wraps instead of pushing past the edge. */}
+          {bio && <p className="mt-1 text-sm text-muted [overflow-wrap:anywhere]">{bio}</p>}
         </div>
         {action}
       </div>
