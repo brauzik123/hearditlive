@@ -270,12 +270,3 @@ export function applyOwnerChoice(song, choice) {
   if (choice.startsWith('artist:')) return { ...plain, ownerName: choice.slice('artist:'.length) };
   return { ...plain, ownerName: null };
 }
-
-// What to show next to a song: its owner, or "cover: X". Nothing when it's
-// worked out automatically or the guest row already says it.
-export function ownerLabel(song) {
-  const choice = ownerChoice(song);
-  if (choice === 'cover') return { cover: song.coverOriginalArtist?.trim() || null };
-  if (choice.startsWith('artist:')) return { artist: song.ownerName };
-  return null;
-}

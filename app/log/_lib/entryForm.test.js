@@ -6,7 +6,6 @@ import {
   billedNames,
   copyFromFriend,
   ownerChoice,
-  ownerLabel,
   setlistArtistNames,
   emptyForm,
   entryPayload,
@@ -346,12 +345,5 @@ describe('whose song, set by hand', () => {
     for (const choice of ['auto', 'guest', 'artist:Tezzus', 'cover']) {
       expect(ownerChoice({ ...song, ...applyOwnerChoice(song, choice) })).toBe(choice);
     }
-  });
-
-  it('labels owners and covers, and stays quiet otherwise', () => {
-    expect(ownerLabel({ ...song, ownerName: 'Tezzus' })).toEqual({ artist: 'Tezzus' });
-    expect(ownerLabel({ ...song, isCover: true, coverOriginalArtist: 'Radiohead' })).toEqual({ cover: 'Radiohead' });
-    expect(ownerLabel({ ...song, ownerName: 'Żabson' })).toBeNull();
-    expect(ownerLabel(song)).toBeNull();
   });
 });
