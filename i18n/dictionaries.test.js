@@ -35,7 +35,7 @@ function usedKeys() {
   const built = {
     'collection.sort': ['date_desc', 'date_asc', 'rating_desc', 'artist_asc'],
     'entry.visibility': ['public', 'friends', 'private'],
-    'friends.tabs': ['activity', 'friends', 'requests', 'find'],
+    'friends.tabs': ['friends', 'requests', 'find'],
     'profile.visibilityNote': ['friends', 'private'],
     visibility: ['public', 'friends', 'private'],
     'settings.visibilityHint': ['public', 'friends', 'private'],

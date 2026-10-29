@@ -127,3 +127,13 @@ textarea::placeholder {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Friends page panel: a bottom sheet on phones, a side panel on wider screens. */
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes sheet-left {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
