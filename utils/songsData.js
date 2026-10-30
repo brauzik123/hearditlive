@@ -1,6 +1,7 @@
 import { closeSongKey, normalizeSongName } from './normalize';
 import { fetchAll, fetchAllIn } from './fetchAll';
 import { checked } from './checked';
+import { VARIANT_RELEASE } from './releases';
 import { songCountsFor } from './showArtists';
 
 // Data for the Songs section, for any user — your own (/songs) or someone
@@ -237,10 +238,19 @@ export async function getArtistSongs(supabase, userId, artistId) {
 
   // Album tracks first, so a song that's on an album is shown there and not
   // again as a single or feature (older lookups can have saved it twice).
-  const albumFirst = [...(catalogSongs ?? [])].sort((a, b) => (a.album_id ? 0 : 1) - (b.album_id ? 0 : 1));
+  // Albums of remixes or chopped/instrumental versions are never shown, even
+  // if an older sync stored one.
+  const shownAlbums = (albumRows ?? []).filter((album) => !VARIANT_RELEASE.test(album.name));
+  const albumDate = new Map(shownAlbums.map((album) => [album.id, album.release_date ?? '9999']));
+  // Oldest album first, then everything else: a heard song counts once, on
+  // the release it first came out on, never again on a later remix or
+  // compilation that happens to carry it too.
+  const albumFirst = [...(catalogSongs ?? [])]
+    .filter((song) => !song.album_id || albumDate.has(song.album_id))
+    .sort((a, b) => (a.album_id ? 0 : 1) - (b.album_id ? 0 : 1) || (albumDate.get(a.album_id) ?? '').localeCompare(albumDate.get(b.album_id) ?? ''));
   albumFirst.forEach((song) => {
     const key = normalizeSongName(song.name);
-    const heard = heardCounts.get(key);
+    const heard = matchedNormalized.has(key) ? null : heardCounts.get(key);
     const entry = {
       name: song.name,
       heard: !!heard,
@@ -302,7 +312,7 @@ export async function getArtistSongs(supabase, userId, artistId) {
     .filter(([key]) => !matchedNormalized.has(key))
     .map(([, v]) => ({ name: v.rawName, count: v.count, excluded: v.excluded, asGuest: v.asGuest }));
 
-  const albums = (albumRows ?? []).map((album) => ({
+  const albums = shownAlbums.map((album) => ({
     id: album.id,
     name: album.name,
     imageUrl: album.image_url,
