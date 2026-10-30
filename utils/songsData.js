@@ -212,7 +212,10 @@ export async function getArtistSongs(supabase, userId, artistId) {
   const features = [];
   const matchedNormalized = new Set();
 
-  (catalogSongs ?? []).forEach((song) => {
+  // Album tracks first, so a song that's on an album is shown there and not
+  // again as a single or feature (older lookups can have saved it twice).
+  const albumFirst = [...(catalogSongs ?? [])].sort((a, b) => (a.album_id ? 0 : 1) - (b.album_id ? 0 : 1));
+  albumFirst.forEach((song) => {
     const key = normalizeSongName(song.name);
     const heard = heardCounts.get(key);
     const entry = {
@@ -230,12 +233,12 @@ export async function getArtistSongs(supabase, userId, artistId) {
       songsByAlbum.get(song.album_id).push(entry);
       if (heard) matchedNormalized.add(key);
     } else if (song.is_feature) {
-      if (heard) {
+      if (heard && !matchedNormalized.has(key)) {
         features.push(entry);
         matchedNormalized.add(key);
       }
     } else if (song.spotify_track_id) {
-      if (heard) {
+      if (heard && !matchedNormalized.has(key)) {
         singles.push(entry);
         matchedNormalized.add(key);
       }

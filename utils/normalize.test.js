@@ -51,3 +51,16 @@ describe('chopped & screwed versions', () => {
     expect(normalizeSongName('Mo Bamba - Chopped & Screwed')).toBe('mo bamba');
   });
 });
+
+describe('square brackets', () => {
+  it('drops guests and version tags in square brackets too', () => {
+    expect(normalizeSongName('Niagara Falls (Foot or 2) [with Travis Scott & 21 Savage]')).toBe(normalizeSongName('Niagara Falls (Foot or 2)'));
+    expect(normalizeSongName('I Can’t Save You (Interlude) [with Future & feat. Don Toliver]')).toBe(normalizeSongName("I Can't Save You (interlude)"));
+    expect(normalizeSongName('All The Money (with Gunna) [Bonus]')).toBe('all the money');
+    expect(normalizeSongName('Song [Remastered 2011]')).toBe('song');
+  });
+
+  it('keeps square brackets that are part of the title', () => {
+    expect(normalizeSongName('Intro [Part 2]')).toBe('intro part 2');
+  });
+});

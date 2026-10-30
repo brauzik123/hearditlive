@@ -2,13 +2,15 @@
 // setlists) against Spotify catalog titles, which don't always agree on
 // punctuation, casing, or "(feat. X)" / "- 2011 Remaster" / "- ChoppedNotSlopped"
 // style suffixes.
-const VARIANT = 'live|remix|remaster(ed)?|acoustic|demo|edit|mono|stereo|sped up|slowed|chopped|screwed|instrumental|radio edit|extended|explicit|clean';
+const VARIANT = 'live|remix|remaster(ed)?|acoustic|demo|edit|mono|stereo|sped up|slowed|chopped|screwed|instrumental|radio edit|extended|explicit|clean|bonus( track)?';
 
+// Round or square brackets: Spotify writes both "(with Gunna)" and
+// "[with Future & feat. Don Toliver]", "(Remastered)" and "[Bonus]".
 export function normalizeSongName(name) {
   return (name ?? '')
     .toLowerCase()
-    .replace(/\((feat|ft|with)\.?\s[^)]*\)/g, '')
-    .replace(new RegExp(`\\((\\d{4}\\s)?(${VARIANT})[^)]*\\)`, 'g'), '')
+    .replace(/[([](feat|ft|with)\.?\s[^)\]]*[)\]]/g, '')
+    .replace(new RegExp(`[(\\[](\\d{4}\\s)?(${VARIANT})[^)\\]]*[)\\]]`, 'g'), '')
     .replace(new RegExp(`\\s[-–—]\\s*(\\d{4}\\s)?(${VARIANT}).*`, 'g'), '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
