@@ -1,23 +1,14 @@
-import { Big_Shoulders, Instrument_Sans } from 'next/font/google';
+// Fonts ship with the app (Fontsource) instead of being fetched from Google
+// at build time, so builds don't depend on Google Fonts being reachable.
+// Marquee face for artist names, dates and numbers; a clean sans for the
+// rest. Browsers download only the character sets a page uses, Polish
+// letters (ą ć ę ł ń ó ś ź ż) included.
+import '@fontsource-variable/big-shoulders/wght.css';
+import '@fontsource-variable/instrument-sans/wght.css';
 import './globals.css';
 import ConditionalNavBar from '../components/ConditionalNavBar';
 import { I18nProvider } from '../i18n/client';
 import { getDateFormat, getDictionary, getLocale } from '../i18n/server';
-
-// Marquee face for artist names, dates and numbers; a clean sans for the
-// rest. Both include latin-ext for Polish (ą ć ę ł ń ó ś ź ż).
-const marquee = Big_Shoulders({
-  variable: '--font-marquee',
-  subsets: ['latin', 'latin-ext'],
-  weight: ['600', '700', '800', '900'],
-  // No metric overrides exist for this face; skip the fallback adjustment.
-  adjustFontFallback: false,
-});
-
-const body = Instrument_Sans({
-  variable: '--font-body',
-  subsets: ['latin', 'latin-ext'],
-});
 
 // Installed on a phone (Add to Home Screen) the app runs full-screen: the
 // page draws under the status bar, so content is padded by the safe areas.
@@ -38,7 +29,7 @@ export async function generateMetadata() {
 export default async function RootLayout({ children }) {
   const [locale, dateFormat] = await Promise.all([getLocale(), getDateFormat()]);
   return (
-    <html lang={locale} className={`${marquee.variable} ${body.variable}`}>
+    <html lang={locale}>
       <body className="font-sans pt-[env(safe-area-inset-top)] pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0 md:pt-16">
         <I18nProvider locale={locale} dateFormat={dateFormat} dict={getDictionary(locale)}>
           <ConditionalNavBar />

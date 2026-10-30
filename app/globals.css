@@ -34,8 +34,8 @@
   --color-paper-muted: var(--paper-muted);
   --color-paper-rule: var(--paper-rule);
   --color-danger: var(--danger);
-  --font-sans: var(--font-body);
-  --font-display: var(--font-marquee);
+  --font-sans: 'Instrument Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Big Shoulders Variable', 'Arial Narrow', ui-sans-serif, sans-serif;
 }
 
 body {
