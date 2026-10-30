@@ -44,3 +44,10 @@ describe('sameArtistName', () => {
     expect(sameArtistName('', '')).toBe(false);
   });
 });
+
+describe('chopped & screwed versions', () => {
+  it('match the original song', () => {
+    expect(normalizeSongName('Raindrops (Insane) [with Travis Scott] - ChoppedNotSlopped')).toBe(normalizeSongName('Raindrops (Insane) [with Travis Scott]'));
+    expect(normalizeSongName('Mo Bamba - Chopped & Screwed')).toBe('mo bamba');
+  });
+});

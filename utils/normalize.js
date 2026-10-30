@@ -1,7 +1,8 @@
 // Shared name normalization used for matching heard song titles (from
 // setlists) against Spotify catalog titles, which don't always agree on
-// punctuation, casing, or "(feat. X)" / "- 2011 Remaster" style suffixes.
-const VARIANT = 'live|remix|remaster(ed)?|acoustic|demo|edit|mono|stereo|sped up|slowed|instrumental|radio edit|extended|explicit|clean';
+// punctuation, casing, or "(feat. X)" / "- 2011 Remaster" / "- ChoppedNotSlopped"
+// style suffixes.
+const VARIANT = 'live|remix|remaster(ed)?|acoustic|demo|edit|mono|stereo|sped up|slowed|chopped|screwed|instrumental|radio edit|extended|explicit|clean';
 
 export function normalizeSongName(name) {
   return (name ?? '')

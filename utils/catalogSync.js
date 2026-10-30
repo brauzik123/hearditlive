@@ -10,7 +10,15 @@ import {
 } from './spotify';
 import { normalizeSongName } from './normalize';
 import { fetchAll } from './fetchAll';
-import { buildCatalog, classifyHeardTrack, creditedName, officialSpelling, orderReleases, pickEditions } from './releases';
+import {
+  buildCatalog,
+  classifyHeardTrack,
+  creditedName,
+  isVariantTracklist,
+  officialSpelling,
+  orderReleases,
+  pickEditions,
+} from './releases';
 import { findArtistMbid, getBandMemberships } from './musicbrainz';
 
 export { normalizeSongName };
@@ -88,9 +96,22 @@ async function syncCatalog(supabase, artist) {
   const releases = orderReleases(all, resolved.spotify_id);
 
   // One-track singles need no extra request: the release is the song.
-  const tracklists = await mapLimit(releases, 5, (release) =>
-    release.total_tracks > 1 ? getAlbumTracks(release.id) : [{ id: release.id, name: release.name }]
-  );
+  const tracksOf = (release) =>
+    release.total_tracks > 1 ? getAlbumTracks(release.id) : [{ id: release.id, name: release.name }];
+  const tracklists = await mapLimit(releases, 5, tracksOf);
+
+  // An edition that turns out to be chopped/slowed versions under a plain
+  // name gives way to the album's next edition (rare, so the extra fetch is
+  // cheap overall).
+  for (let i = 0; i < releases.length; i++) {
+    let alternates = releases[i].alternates ?? [];
+    while (alternates.length && isVariantTracklist(tracklists[i])) {
+      const [next, ...rest] = alternates;
+      releases[i] = { ...next, alternates: rest };
+      tracklists[i] = await tracksOf(next);
+      alternates = rest;
+    }
+  }
   const { albums, songs } = buildCatalog(releases, tracklists, resolved.spotify_id);
 
   const { error } = await supabase.rpc('replace_artist_catalog', {

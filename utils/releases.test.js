@@ -5,6 +5,7 @@ import {
   creditedName,
   editionKey,
   isOwnRelease,
+  isVariantTracklist,
   officialSpelling,
   orderReleases,
   pickEditions,
@@ -211,5 +212,51 @@ describe('classifyHeardTrack', () => {
   it("calls anything else a feature", () => {
     expect(classifyHeardTrack(track([{ id: 'post', name: 'Post Malone' }]), QUAVO, [migos])).toEqual({ kind: 'feature' });
     expect(classifyHeardTrack(track([{ id: 'post', name: 'Post Malone' }]), QUAVO)).toEqual({ kind: 'feature' });
+  });
+});
+
+describe('chopped, slowed and other whole-album variants', () => {
+  it('keeps the original album instead of its chopped re-release', () => {
+    const kept = pickEditions([
+      release({ id: 'og', name: 'HEROES & VILLAINS', tracks: 15, date: '2022-12-02' }),
+      release({ id: 'cns', name: 'HEROES & VILLAINS [ChoppedNotSlopped]', tracks: 18, date: '2023-01-20' }),
+      release({ id: 'sm2', name: 'SAVAGE MODE II [CHOPPED NOT SLOPPED]', tracks: 15 }),
+      release({ id: 'slow', name: 'Album (Slowed + Reverb)', tracks: 10 }),
+      release({ id: 'inst', name: 'Album (Instrumentals)', tracks: 10 }),
+    ]);
+    expect(kept.map((r) => r.id)).toEqual(['og']);
+  });
+
+  it('still keeps remix singles, which are guest appearances', () => {
+    const single = release({ id: 's', name: 'Congratulations (Remix)', type: 'single', tracks: 1 });
+    expect(pickEditions([single]).map((r) => r.id)).toEqual(['s']);
+  });
+
+  it('keeps albums whose names only look similar', () => {
+    const kept = pickEditions([release({ id: 'a', name: 'Choppa Style', tracks: 12 }), release({ id: 'b', name: 'Screwball', tracks: 9 })]);
+    expect(kept).toHaveLength(2);
+  });
+});
+
+describe('editions with a chopped tracklist under a plain name', () => {
+  it('keeps the other editions of an album as alternates', () => {
+    const [picked] = pickEditions([
+      release({ id: 'og', name: 'HEROES & VILLAINS', tracks: 15 }),
+      release({ id: 'villains', name: 'HEROES & VILLAINS (Villains Version)', tracks: 18 }),
+    ]);
+    expect(picked.id).toBe('villains');
+    expect(picked.alternates.map((r) => r.id)).toEqual(['og']);
+  });
+
+  it('spots a tracklist that is mostly chopped or slowed versions', () => {
+    const villains = [
+      { name: 'Raindrops (Insane) [with Travis Scott] - ChoppedNotSlopped' },
+      { name: 'Umbrella (with 21 Savage & Young Nudy) - ChoppedNotSlopped' },
+      { name: 'Creepin’ (with The Weeknd & 21 Savage) - ChoppedNotSlopped' },
+      { name: 'On Time (with John Legend)' },
+    ];
+    expect(isVariantTracklist(villains)).toBe(true);
+    expect(isVariantTracklist([{ name: 'Sicko Mode' }, { name: 'Stargazing' }, { name: 'Mo Bamba (Slowed)' }])).toBe(false);
+    expect(isVariantTracklist([])).toBe(false);
   });
 });

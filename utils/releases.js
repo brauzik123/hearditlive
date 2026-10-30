@@ -24,22 +24,45 @@ export function editionKey(release) {
 // Kilmainham Gaol"), so they'd steal those songs from their real home.
 export const LIVE_RELEASE = /(^|\s|\(|\[|-\s*)live(\s+(at|from|in|on)\b|\s*[)\]]|$)/i;
 
+// Whole albums re-released as a sound treatment: chopped & screwed
+// ("HEROES & VILLAINS [ChoppedNotSlopped]"), slowed, sped up, instrumental,
+// a cappella. Same songs, so they'd crowd out the original edition.
+export const VARIANT_RELEASE = /\b(chopped|screwed|slowed|sped[\s-]?up|instrumentals?|a[\s-]?cappella|acapella)/i;
+
 export function pickEditions(allReleases) {
-  const releases = allReleases.filter((r) => !LIVE_RELEASE.test(r.name));
+  // Only albums and EPs are dropped as variants: a remix single someone else
+  // put out ("Congratulations (Remix)") is still a real guest appearance.
+  const releases = allReleases.filter((r) => !LIVE_RELEASE.test(r.name) && !(isTile(r) && VARIANT_RELEASE.test(r.name)));
+  // Per album, the most complete edition wins; the others stay attached as
+  // `alternates` (most tracks first) in case its tracklist turns out to be a
+  // chopped/slowed version under a plain name (see isVariantTracklist).
   const byKey = new Map();
   releases.forEach((release) => {
     const key = editionKey(release);
-    const current = byKey.get(key);
-    if (!current || release.total_tracks > current.total_tracks) byKey.set(key, release);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(release);
+  });
+  const picked = [...byKey.values()].map((editions) => {
+    const [best, ...alternates] = [...editions].sort((a, b) => b.total_tracks - a.total_tracks);
+    return { ...best, alternates };
   });
   // Albums first, then EPs, then singles, and oldest first within each:
   // when a song appears on several releases, the first one claims it — so
   // it stays with the album it originally came out on, not a later
   // deluxe/expanded reissue under a different title.
   const rank = (r) => (r.album_type === 'album' ? 0 : isTile(r) ? 1 : 2);
-  return [...byKey.values()].sort(
+  return picked.sort(
     (a, b) => rank(a) - rank(b) || (a.release_date ?? '').localeCompare(b.release_date ?? '')
   );
+}
+
+// A tracklist that's mostly chopped & screwed / slowed / sped-up versions
+// ("Raindrops (Insane) - ChoppedNotSlopped"), as on "HEROES & VILLAINS
+// (Villains Version)", whose name doesn't say so.
+const VARIANT_TRACK = /([-–—(\[]\s*)(chopped|screwed|slowed|sped[\s-]?up)/i;
+export function isVariantTracklist(tracks) {
+  if (!tracks?.length) return false;
+  return tracks.filter((t) => VARIANT_TRACK.test(t.name)).length > tracks.length / 2;
 }
 
 // Spotify release dates can be just a year or a year and month.
