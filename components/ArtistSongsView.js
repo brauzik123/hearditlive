@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, Music2, Check, X, Disc3, Sparkles, HelpCircle, Loader2, Users } from 'lucide-react';
 import { createClient } from '../utils/supabase/client';
 import { useI18n } from '../i18n/client';
+import { syncArtistPaced } from '../utils/artistSyncClient';
 
 function Tile({ imageUrl, icon: Icon, title, heard, total, active, onClick }) {
   const pct = total ? Math.round((heard / total) * 100) : null;
@@ -128,25 +129,28 @@ export default function ArtistSongsView({
   const [syncing, setSyncing] = useState(needsSync);
   const router = useRouter();
   const startedRef = useRef(false);
+  const leftRef = useRef(false);
 
   useEffect(() => {
     if (!needsSync || startedRef.current) return;
     startedRef.current = true;
     (async () => {
-      try {
-        await fetch('/api/catalog/sync-artist', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ artistId: artist.id, userId: ownerId }),
-        });
-      } catch {
-        // Keep showing whatever is already cached.
-      }
+      // Whatever is already cached stays on screen in the meantime.
+      const outcome = await syncArtistPaced(artist.id, ownerId, { isStopped: () => leftRef.current });
+      if (outcome === 'stopped') return;
       setSyncing(false);
       router.refresh();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsSync]);
+
+  // Leaving the page ends any wait for this artist's turn.
+  useEffect(() => {
+    leftRef.current = false;
+    return () => {
+      leftRef.current = true;
+    };
+  }, []);
 
   // Falls back to the first group when nothing (or something that no
   // longer exists after a sync) is selected.

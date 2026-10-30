@@ -13,3 +13,9 @@ export function hasAnyTag(entry, chosen) {
   if (!chosen.length) return true;
   return (entry.entry_tags ?? []).some((t) => chosen.includes(t.tags?.name));
 }
+
+// Your tags not on this show yet, for one-tap adding.
+export function unusedTags(allTags, chosen) {
+  const taken = new Set(chosen.map((name) => name.trim().toLowerCase()));
+  return allTags.filter((name) => !taken.has(name.trim().toLowerCase()));
+}

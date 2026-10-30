@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasAnyTag, tagNamesOf } from './tags';
+import { hasAnyTag, tagNamesOf, unusedTags } from './tags';
 
 const show = (...names) => ({ entry_tags: names.map((name) => ({ tags: { name } })) });
 
@@ -16,5 +16,11 @@ describe('tags', () => {
 
   it('keeps everything when no tag is chosen', () => {
     expect(hasAnyTag(show(), [])).toBe(true);
+  });
+});
+
+describe('unusedTags', () => {
+  it('leaves out tags already on the show, regardless of case', () => {
+    expect(unusedTags(['front row', 'road trip', 'solo'], ['Front Row'])).toEqual(['road trip', 'solo']);
   });
 });

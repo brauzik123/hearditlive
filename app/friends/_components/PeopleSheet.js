@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, Check, X, UserPlus, Clock, Loader2 } from 'lucide-react';
 import { createClient } from '../../../utils/supabase/client';
+import { groupGuestNames } from '../../../utils/attendees';
 import { useI18n } from '../../../i18n/client';
 import CopyButton from '../../../components/CopyButton';
 import Avatar from '../../../components/Avatar';
@@ -348,10 +349,110 @@ export default function PeopleSheet({ open, onClose, initialTab, onRequestsChang
                   </Link>
                 </li>
               ))}
+              <LinkGuestNames friends={friends} />
             </ul>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+// Names you typed for people before they had an account. Linking one swaps
+// it for the friend's account on all your shows at once.
+function LinkGuestNames({ friends }) {
+  const { t } = useI18n();
+  const [guests, setGuests] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('entry_attendees')
+        .select('guest_name, user_id, concert_entries!inner(user_id)')
+        .eq('concert_entries.user_id', user.id)
+        .is('user_id', null)
+        .limit(1000);
+      setGuests(groupGuestNames(data ?? []));
+    })();
+  }, []);
+
+  if (!guests.length) return null;
+
+  return (
+    <li className="mt-6 flex flex-col gap-1 list-none">
+      <h3 className="text-sm font-semibold">{t('friends.linkTitle')}</h3>
+      <p className="text-xs text-muted">{t('friends.linkHint')}</p>
+      <ul className="mt-1 flex flex-col">
+        {guests.map((guest) => (
+          <GuestRow
+            key={guest.name}
+            guest={guest}
+            friends={friends}
+            onLinked={() => setGuests((list) => list.filter((g) => g !== guest))}
+          />
+        ))}
+      </ul>
+    </li>
+  );
+}
+
+function GuestRow({ guest, friends, onLinked }) {
+  const { t } = useI18n();
+  const router = useRouter();
+  // A friend who took the same name as you typed is the likely match.
+  const sameName = friends.find((f) => f.username.toLowerCase() === guest.name.toLowerCase());
+  const [friendId, setFriendId] = useState(sameName?.id ?? '');
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const link = async () => {
+    setBusy(true);
+    setFailed(false);
+    const { error } = await createClient().rpc('link_guest_to_friend', { p_guest: guest.name, p_friend: friendId });
+    setBusy(false);
+    if (error) {
+      setFailed(true);
+      return;
+    }
+    onLinked();
+    router.refresh();
+  };
+
+  return (
+    <li className="flex flex-col gap-2 border-b border-border py-3 last:border-b-0">
+      <p className="text-sm">
+        <span className="font-medium">{guest.name}</span>{' '}
+        <span className="text-muted">{t('friends.linkShows', { count: guest.count })}</span>
+      </p>
+      <div className="flex gap-2">
+        <select
+          value={friendId}
+          onChange={(e) => setFriendId(e.target.value)}
+          aria-label={t('friends.linkChoose', { name: guest.name })}
+          className="filter-select min-w-0 flex-1 rounded-full px-3"
+        >
+          <option value="">{t('friends.linkPlaceholder')}</option>
+          {friends.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.username}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={link}
+          disabled={!friendId || busy}
+          className="shrink-0 rounded-full bg-brand px-3.5 py-2 text-sm font-bold text-brand-foreground disabled:opacity-40"
+        >
+          {t('friends.linkButton')}
+        </button>
+      </div>
+      {failed && <p className="text-sm text-danger">{t('friends.linkFailed')}</p>}
+    </li>
   );
 }

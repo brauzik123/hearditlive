@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, Music2, Loader2, ArrowLeft } from 'lucide-react';
 import { useI18n } from '../i18n/client';
+import { syncArtistPaced } from '../utils/artistSyncClient';
+import { SONG_SORTS, sortSongArtists } from '../utils/songsSort';
 
 // Your own Songs (/songs) or someone else's (/u/[username]/songs). For
 // someone else, `owner` is { id, username } and the sync classifies their
@@ -13,32 +15,52 @@ export default function SongsGrid({ artists, basePath, owner = null }) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [syncingIds, setSyncingIds] = useState(() => new Set(artists.filter((a) => a.needsSync).map((a) => a.id)));
+  const [pace, setPace] = useState(null); // null, 'waiting' (turn coming up) or 'held' (limit for now)
+  const [sort, setSort] = useState('plays');
   const router = useRouter();
   const startedRef = useRef(new Set());
+  const queueRef = useRef([]);
+  const workingRef = useRef(false);
+  const leftRef = useRef(false);
+
+  // Leaving the page ends the queue; the next visit picks it up.
+  useEffect(() => {
+    leftRef.current = false;
+    return () => {
+      leftRef.current = true;
+    };
+  }, []);
 
   useEffect(() => {
+    // Marked as soon as they're queued: every refresh below brings a new
+    // `artists`, and must not queue the same artists again.
     const toSync = artists.filter((a) => a.needsSync && !startedRef.current.has(a.id));
     if (!toSync.length) return;
+    toSync.forEach((a) => startedRef.current.add(a.id));
+    queueRef.current.push(...toSync);
 
     setSyncingIds((prev) => new Set([...prev, ...toSync.map((a) => a.id)]));
 
-    // One artist at a time: a full discography can be dozens of Spotify
-    // calls, and a batch of new artists synced in parallel can trip
-    // Spotify's rate limit (which pauses every sync for a while).
-    const queue = [...toSync];
-    const worker = async () => {
-      while (queue.length) {
+    // One artist at a time, and only one worker: a full discography can be
+    // dozens of Spotify calls, and going over Spotify's limit pauses every
+    // sync for a while. The server spaces them out (see syncArtistPaced).
+    if (workingRef.current) return;
+    workingRef.current = true;
+    (async () => {
+      const queue = queueRef.current;
+      while (queue.length && !leftRef.current) {
         const artist = queue.shift();
-        startedRef.current.add(artist.id);
-        try {
-          await fetch('/api/catalog/sync-artist', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ artistId: artist.id, userId: owner?.id }),
-          });
-        } catch {
-          // Ignore — tile just keeps showing whatever it already had.
+        const outcome = await syncArtistPaced(artist.id, owner?.id, {
+          isStopped: () => leftRef.current,
+          onWait: () => setPace('waiting'),
+        });
+        if (outcome === 'paused') {
+          queue.length = 0;
+          setPace('held');
+          setSyncingIds(new Set());
+          break;
         }
+        if (outcome === 'stopped') break;
         setSyncingIds((prev) => {
           const next = new Set(prev);
           next.delete(artist.id);
@@ -46,16 +68,16 @@ export default function SongsGrid({ artists, basePath, owner = null }) {
         });
         router.refresh();
       }
-    };
-    worker();
+      workingRef.current = false;
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artists]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return artists;
-    return artists.filter((a) => a.name.toLowerCase().includes(q));
-  }, [artists, query]);
+    const matching = q ? artists.filter((a) => a.name.toLowerCase().includes(q)) : artists;
+    return sortSongArtists(matching, sort);
+  }, [artists, query, sort]);
 
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 md:py-10">
@@ -71,19 +93,38 @@ export default function SongsGrid({ artists, basePath, owner = null }) {
         </p>
       </div>
 
-      {artists.length > 6 && (
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" size={17} />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('songs.search')}
-            aria-label={t('songs.search')}
-            className="field rounded-full pl-10"
-          />
+      {artists.length > 1 && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          {artists.length > 6 && (
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" size={17} />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t('songs.search')}
+                aria-label={t('songs.search')}
+                className="field rounded-full pl-10"
+              />
+            </div>
+          )}
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            aria-label={t('collection.sortBy')}
+            className="filter-select self-start rounded-full px-3 sm:self-auto"
+          >
+            {SONG_SORTS.map((id) => (
+              <option key={id} value={id}>
+                {t(`songs.sort.${id}`)}
+              </option>
+            ))}
+          </select>
         </div>
       )}
+
+      {pace === 'waiting' && syncingIds.size > 0 && <p className="text-sm text-muted">{t('songs.syncWaiting')}</p>}
+      {pace === 'held' && <p className="text-sm text-muted">{t('songs.syncHeld')}</p>}
 
       {filtered.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border px-5 py-8 text-center text-sm text-muted">

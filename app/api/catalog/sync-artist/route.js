@@ -48,6 +48,8 @@ export async function POST(request) {
       const heardNames = Array.from(new Set(rows.map((r) => r.song_name)));
       if (heardNames.length) await resolveHeardSongsForArtist(admin, synced, heardNames);
     }
+    // Not this artist's turn (or Spotify is paused): the client asks again.
+    if (synced.deferredSeconds) return NextResponse.json({ ok: true, deferred: true, retryAfter: synced.deferredSeconds });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('catalog sync failed:', err);

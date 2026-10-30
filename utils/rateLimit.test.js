@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { LIMITS, rateLimit } from './rateLimit';
+import { LIMITS, rateLimit, takeBudget } from './rateLimit';
 
 const fakeAdmin = (result) => ({ rpc: vi.fn(async () => result) });
 
@@ -32,6 +32,23 @@ describe('rateLimit', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const admin = fakeAdmin({ data: null, error: { message: 'function take_rate_limits does not exist' } });
     expect(await rateLimit(admin, 'syncArtist', 'user-1')).toBeNull();
+    warn.mockRestore();
+  });
+
+  it('takeBudget says how long to wait, or null when there is budget', async () => {
+    const admin = fakeAdmin({ data: 90, error: null });
+    expect(await takeBudget(admin, 'spotifyFullSync')).toBe(90);
+    expect(admin.rpc.mock.calls[0][1].p_rules.map((r) => r.bucket)).toEqual([
+      'spotifyFullSync:all:120',
+      'spotifyFullSync:all:3600',
+      'spotifyFullSync:all:86400',
+    ]);
+    expect(await takeBudget(fakeAdmin({ data: null, error: null }), 'spotifyFullSync')).toBeNull();
+  });
+
+  it('takeBudget allows the call if the limiter is down', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await takeBudget(fakeAdmin({ data: null, error: { message: 'down' } }), 'spotifyFullSync')).toBeNull();
     warn.mockRestore();
   });
 

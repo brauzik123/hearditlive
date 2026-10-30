@@ -10,6 +10,8 @@ import { formatRating } from '../../utils/rating';
 import { billedName } from '../../utils/showArtists';
 import { summarizeFestivals } from '../../utils/festivals';
 import { hasAnyTag, tagNamesOf } from '../../utils/tags';
+import { attendeeNamesOf, hasAnyAttendee } from '../../utils/attendees';
+import { isUpcoming, localToday, sortUpcoming } from '../../utils/upcoming';
 import ErrorScreen from '../../components/ErrorScreen';
 import { cityName } from '../../utils/placeNames';
 
@@ -38,6 +40,17 @@ export default function Collection() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [festivalFilter, setFestivalFilter] = useState([]); // festival names; empty = no filter
   const [tagFilter, setTagFilter] = useState([]); // your tag names; empty = no filter
+  const [friendFilter, setFriendFilter] = useState([]); // people's names; empty = no filter
+  const [tab, setTab] = useState('past'); // 'past' or 'upcoming'
+
+  // Each tab has its own festivals, tags and people to filter by.
+  const chooseTab = (next) => {
+    setTab(next);
+    setFestivalFilter([]);
+    setTagFilter([]);
+    setFriendFilter([]);
+    setFavoritesOnly(false);
+  };
 
   useEffect(() => {
     const saved = readSavedView();
@@ -67,10 +80,9 @@ export default function Collection() {
         .select(
           `id, entry_type, event_date, rating, ticket_status, is_support, is_favorite, festival_id,
            artist_id, artists!concert_entries_artist_id_fkey(name, image_url), entry_co_artists(artist_id, position, artists(name)), venues(name, city, city_id, cities(name_en, name_pl)), festivals(name),
-           entry_photos(url, is_cover), entry_tags(tags(name))`
+           entry_photos(url, is_cover), entry_tags(tags(name)), entry_attendees(guest_name, profiles(username))`
         )
-        .eq('user_id', user.id)
-        .eq('entry_type', 'attended');
+        .eq('user_id', user.id);
 
       // A failed load must not look like an empty collection.
       if (error) {
@@ -81,7 +93,8 @@ export default function Collection() {
       }
 
       // One batch request for every cover photo instead of one per entry.
-      const rows = data ?? [];
+      // Plans whose date has passed aren't upcoming; Home asks about those.
+      const rows = (data ?? []).filter((e) => e.entry_type === 'attended' || isUpcoming(e, localToday()));
       const coverOf = (e) => (e.entry_photos ?? []).find((p) => p.is_cover)?.url;
       const coverPaths = rows.map(coverOf).filter(Boolean);
       const { data: signed } = coverPaths.length
@@ -106,7 +119,9 @@ export default function Collection() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ artistId }),
           });
-          const { imageUrl } = await res.json();
+          const { imageUrl, deferred } = await res.json();
+          // Spotify budget used up for now: the rest wait for the next visit.
+          if (deferred) break;
           if (imageUrl) {
             setEntries((list) => list.map((e) => (e.artist_id === artistId && !e.coverUrl ? { ...e, coverUrl: imageUrl } : e)));
           }
@@ -117,8 +132,12 @@ export default function Collection() {
     })();
   }, []);
 
+  const pastEntries = useMemo(() => entries.filter((e) => e.entry_type === 'attended'), [entries]);
+  const upcomingEntries = useMemo(() => entries.filter((e) => e.entry_type === 'planned'), [entries]);
+  const tabEntries = tab === 'upcoming' ? upcomingEntries : pastEntries;
+
   const filtered = useMemo(() => {
-    let list = entries;
+    let list = tabEntries;
     const q = query.trim().toLowerCase();
     if (q) {
       list = list.filter(
@@ -132,6 +151,10 @@ export default function Collection() {
     if (favoritesOnly) list = list.filter((e) => e.is_favorite);
     if (festivalFilter.length) list = list.filter((e) => festivalFilter.includes(e.festivals?.name));
     if (tagFilter.length) list = list.filter((e) => hasAnyTag(e, tagFilter));
+    if (friendFilter.length) list = list.filter((e) => hasAnyAttendee(e, friendFilter));
+
+    // Upcoming shows only make sense soonest first, with undated plans last.
+    if (tab === 'upcoming') return sortUpcoming(list);
 
     return [...list].sort((a, b) => {
       if (sort === 'date_asc') return (a.event_date ?? '').localeCompare(b.event_date ?? '');
@@ -139,13 +162,14 @@ export default function Collection() {
       if (sort === 'artist_asc') return (billedName(a) ?? '').localeCompare(billedName(b) ?? '');
       return (b.event_date ?? '').localeCompare(a.event_date ?? '');
     });
-  }, [entries, query, sort, favoritesOnly, festivalFilter, tagFilter, locale]);
+  }, [tabEntries, tab, query, sort, favoritesOnly, festivalFilter, tagFilter, friendFilter, locale]);
 
   const festivalNames = useMemo(
-    () => [...new Set(entries.map((e) => e.festivals?.name).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-    [entries]
+    () => [...new Set(tabEntries.map((e) => e.festivals?.name).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [tabEntries]
   );
-  const tagNames = useMemo(() => tagNamesOf(entries), [entries]);
+  const tagNames = useMemo(() => tagNamesOf(tabEntries), [tabEntries]);
+  const friendNames = useMemo(() => attendeeNamesOf(tabEntries), [tabEntries]);
 
   if (loadError) {
     return (
@@ -174,8 +198,8 @@ export default function Collection() {
         <div>
           <h1 className="marquee text-5xl">{t('collection.title')}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <p className="text-sm text-muted">{t('collection.count', { count: entries.length })}</p>
-            <FestivalsButton entries={entries} />
+            <p className="text-sm text-muted">{t('collection.count', { count: tabEntries.length })}</p>
+            {tab === 'past' && <FestivalsButton entries={pastEntries} />}
           </div>
         </div>
         <div role="tablist" aria-label={t('collection.view')} className="flex rounded-full border border-border p-1">
@@ -198,7 +222,27 @@ export default function Collection() {
         </div>
       </div>
 
-      {entries.length > 0 && (
+      <div role="tablist" aria-label={t('collection.when')} className="grid grid-cols-2 rounded-full border border-border p-1">
+        {[
+          { id: 'past', count: pastEntries.length },
+          { id: 'upcoming', count: upcomingEntries.length },
+        ].map(({ id, count }) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => chooseTab(id)}
+            className={`flex items-center justify-center gap-1.5 rounded-full py-1.5 text-sm font-medium transition ${
+              tab === id ? 'bg-brand text-brand-foreground' : 'text-muted hover:text-foreground'
+            }`}
+          >
+            {t(`collection.tabs.${id}`)}
+            {count > 0 && <span className={`text-xs ${tab === id ? '' : 'text-brand'}`}>{count}</span>}
+          </button>
+        ))}
+      </div>
+
+      {tabEntries.length > 0 && (
         <div className="flex flex-col gap-3">
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" size={17} />
@@ -212,21 +256,34 @@ export default function Collection() {
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-              aria-label={t('collection.sortBy')}
-              className="filter-select rounded-full px-3"
-            >
-              {SORTS.map((id) => (
-                <option key={id} value={id}>
-                  {t(`collection.sort.${id}`)}
-                </option>
-              ))}
-            </select>
-            <Chip active={favoritesOnly} onClick={() => setFavoritesOnly((v) => !v)}>
-              {t('collection.favorites')}
-            </Chip>
+            {tab === 'past' && (
+              <>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                  aria-label={t('collection.sortBy')}
+                  className="filter-select rounded-full px-3"
+                >
+                  {SORTS.map((id) => (
+                    <option key={id} value={id}>
+                      {t(`collection.sort.${id}`)}
+                    </option>
+                  ))}
+                </select>
+                <Chip active={favoritesOnly} onClick={() => setFavoritesOnly((v) => !v)}>
+                  {t('collection.favorites')}
+                </Chip>
+              </>
+            )}
+            {friendNames.length > 0 && (
+              <ChoiceFilter
+                label={t('collection.friendFilter')}
+                countLabel={(count) => t('collection.friendCount', { count })}
+                names={friendNames}
+                selected={friendFilter}
+                onChange={setFriendFilter}
+              />
+            )}
             {festivalNames.length > 0 && (
               <ChoiceFilter
                 label={t('collection.festivalFilter')}
@@ -250,11 +307,11 @@ export default function Collection() {
         </div>
       )}
 
-      {entries.length === 0 ? (
+      {tabEntries.length === 0 ? (
         <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border p-6">
-          <p className="text-muted">{t('collection.empty')}</p>
+          <p className="text-muted">{t(tab === 'upcoming' ? 'collection.emptyUpcoming' : 'collection.empty')}</p>
           <Link href="/log" className="rounded-full bg-brand px-4 py-2 text-sm font-bold text-brand-foreground">
-            {t('collection.emptyCta')}
+            {t(tab === 'upcoming' ? 'collection.emptyUpcomingCta' : 'collection.emptyCta')}
           </Link>
         </div>
       ) : filtered.length === 0 ? (

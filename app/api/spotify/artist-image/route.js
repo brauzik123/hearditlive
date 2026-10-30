@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '../../../../utils/supabase/server';
 import { createAdminClient } from '../../../../utils/supabase/admin';
-import { rateLimit } from '../../../../utils/rateLimit';
-import { blockSpotify, ensureArtistImage, spotifyBlockedUntil, SpotifyRateLimitError } from '../../../../utils/spotify';
+import { rateLimit, takeBudget } from '../../../../utils/rateLimit';
+import { blockSpotify, ensureArtistImage, needsArtistLookup, spotifyBlockedUntil, SpotifyRateLimitError } from '../../../../utils/spotify';
 
 export async function POST(request) {
   const supabase = await createClient();
@@ -20,8 +20,12 @@ export async function POST(request) {
   const { data: artist } = await admin.from('artists').select('*').eq('id', artistId).maybeSingle();
   if (!artist) return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
 
-  if (artist.image_url || (await spotifyBlockedUntil(admin))) {
+  if (artist.image_url || !needsArtistLookup(artist)) {
     return NextResponse.json({ imageUrl: artist.image_url ?? null });
+  }
+  // Out of budget, or Spotify paused: the client stops asking for this visit.
+  if ((await spotifyBlockedUntil(admin)) || (await takeBudget(admin, 'spotifyArtistLookup')) != null) {
+    return NextResponse.json({ imageUrl: null, deferred: true });
   }
   try {
     const resolved = await ensureArtistImage(admin, artist);

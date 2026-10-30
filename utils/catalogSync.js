@@ -24,10 +24,11 @@ import {
 } from './releases';
 import { findArtistMbid, getBandMemberships } from './musicbrainz';
 import { refreshPlan } from './catalogRefresh';
+import { takeBudget } from './rateLimit';
 
 export { normalizeSongName };
 
-const MAX_SONG_LOOKUPS_PER_SYNC = 50;
+const MAX_SONG_LOOKUPS_PER_SYNC = 15;
 
 // A claim older than this is assumed abandoned (crashed/timed-out request).
 const SYNC_CLAIM_TTL_MS = 2 * 60 * 1000;
@@ -61,7 +62,8 @@ export async function ensureArtistSynced(supabase, artist) {
   if (plan === 'skip') return artist;
   if (isInBackoff(artist)) return artist;
   // Spotify has the whole app paused: wait it out without calling it.
-  if (await spotifyBlockedUntil(supabase)) return artist;
+  const blockedUntil = await spotifyBlockedUntil(supabase);
+  if (blockedUntil) return { ...artist, deferredSeconds: Math.ceil((blockedUntil.getTime() - Date.now()) / 1000) };
 
   if (plan === 'light' && artist.spotify_id) {
     try {
@@ -78,6 +80,25 @@ export async function ensureArtistSynced(supabase, artist) {
     }
   }
 
+  // Find out whether the artist is on Spotify at all before spending a full
+  // sync on them: a band that isn't costs one search and shouldn't hold up
+  // the queue. The rest wait for the next slot (deferredSeconds).
+  let current = artist;
+  try {
+    current = await ensureArtistImage(supabase, artist);
+  } catch (err) {
+    if (err instanceof SpotifyRateLimitError) {
+      await blockSpotify(supabase, err.retryAfterSeconds);
+      return artist;
+    }
+    await recordFailure(supabase, artist);
+    throw err;
+  }
+  if (current.spotify_id) {
+    const wait = await takeBudget(supabase, 'spotifyFullSync');
+    if (wait != null) return { ...current, deferredSeconds: wait };
+  }
+
   // Atomically claim the sync; if another request holds a live claim, let
   // it do the work instead of syncing the same artist twice.
   const staleBefore = new Date(Date.now() - SYNC_CLAIM_TTL_MS).toISOString();
@@ -87,10 +108,10 @@ export async function ensureArtistSynced(supabase, artist) {
     .eq('id', artist.id)
     .or(`sync_started_at.is.null,sync_started_at.lt.${staleBefore}`)
     .select('id');
-  if (!claimed?.length) return artist;
+  if (!claimed?.length) return current;
 
   try {
-    const synced = await syncCatalog(supabase, artist);
+    const synced = await syncCatalog(supabase, current);
     await supabase
       .from('artists')
       .update({ sync_started_at: null, sync_failed_at: null, sync_fail_count: 0 })
@@ -118,7 +139,7 @@ async function syncCatalog(supabase, artist) {
   // One-track singles need no extra request: the release is the song.
   const tracksOf = (release) =>
     release.total_tracks > 1 ? getAlbumTracks(release.id) : [{ id: release.id, name: release.name }];
-  const tracklists = await mapLimit(releases, 5, tracksOf);
+  const tracklists = await mapLimit(releases, 3, tracksOf);
 
   // An edition padded with chopped/slowed/instrumental copies of its own
   // songs ("HEROES & VILLAINS (Villains Version)") is compared with the
@@ -176,6 +197,8 @@ export async function resolveHeardSongsForArtist(supabase, artist, heardNames) {
   if (!unmatched.length) return;
 
   if (artist.spotify_id && (await spotifyBlockedUntil(supabase))) return;
+  // Over budget: nothing is lost, these are looked up on a later visit.
+  if (artist.spotify_id && (await takeBudget(supabase, 'spotifySongLookups')) != null) return;
 
   // Bands the artist is in (see ensureArtistGroups): a heard song found on a
   // band's release is filed under that band, not as the artist's feature.
@@ -191,7 +214,7 @@ export async function resolveHeardSongsForArtist(supabase, artist, heardNames) {
   const batch = unmatched.slice(0, MAX_SONG_LOOKUPS_PER_SYNC);
   let aborted = false;
   let rateLimit = null;
-  const results = await mapLimit(batch, 4, async (name) => {
+  const results = await mapLimit(batch, 2, async (name) => {
     const base = { artist_id: artist.id, name, album_id: null, spotify_track_id: null, is_feature: false };
     if (!artist.spotify_id) return base;
     if (aborted) return null;

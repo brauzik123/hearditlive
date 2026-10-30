@@ -112,14 +112,17 @@ export function bestImage(images) {
 
 const RECHECK_UNKNOWN_ARTIST_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
+// Whether finding this artist on Spotify would take a search.
+export function needsArtistLookup(artist, now = Date.now()) {
+  if (artist.spotify_id) return false;
+  return !artist.spotify_checked_at || now - new Date(artist.spotify_checked_at).getTime() >= RECHECK_UNKNOWN_ARTIST_MS;
+}
+
 // Resolves spotify_id + a photo URL for an artist and caches it on the row.
 // "Not on Spotify" is cached too (spotify_checked_at), otherwise every view
 // of a local band would search Spotify again.
 export async function ensureArtistImage(supabase, artist) {
-  if (artist.spotify_id) return artist;
-  const checkedRecently =
-    artist.spotify_checked_at && Date.now() - new Date(artist.spotify_checked_at).getTime() < RECHECK_UNKNOWN_ARTIST_MS;
-  if (checkedRecently) return artist;
+  if (!needsArtistLookup(artist)) return artist;
 
   const match = await searchArtist(artist.name);
   const checkedAt = new Date().toISOString();
@@ -148,7 +151,7 @@ export async function getArtistReleases(spotifyArtistId) {
   const total = Math.min(first.total ?? 0, MAX_RELEASES);
   const offsets = [];
   for (let offset = PAGE_SIZE; offset < total; offset += PAGE_SIZE) offsets.push(offset);
-  const pages = await mapLimit(offsets, 4, (offset) => spotifyFetch(path(offset)));
+  const pages = await mapLimit(offsets, 2, (offset) => spotifyFetch(path(offset)));
   return { items: [first, ...pages].flatMap((page) => page.items ?? []), total: first.total ?? 0 };
 }
 
