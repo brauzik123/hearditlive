@@ -149,7 +149,14 @@ export async function getArtistReleases(spotifyArtistId) {
   const offsets = [];
   for (let offset = PAGE_SIZE; offset < total; offset += PAGE_SIZE) offsets.push(offset);
   const pages = await mapLimit(offsets, 4, (offset) => spotifyFetch(path(offset)));
-  return [first, ...pages].flatMap((page) => page.items ?? []);
+  return { items: [first, ...pages].flatMap((page) => page.items ?? []), total: first.total ?? 0 };
+}
+
+// How many albums + singles/EPs Spotify lists for the artist: one request,
+// for the cheap "anything new since the last sync?" check.
+export async function getReleaseCount(spotifyArtistId) {
+  const page = await spotifyFetch(`/artists/${spotifyArtistId}/albums?include_groups=album,single&limit=1`);
+  return page.total ?? 0;
 }
 
 // Full tracklist of one release, in play order across discs.

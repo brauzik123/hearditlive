@@ -3,6 +3,7 @@ import { fetchAll, fetchAllIn } from './fetchAll';
 import { checked } from './checked';
 import { VARIANT_RELEASE } from './releases';
 import { songCountsFor } from './showArtists';
+import { refreshPlan } from './catalogRefresh';
 
 // Data for the Songs section, for any user — your own (/songs) or someone
 // else's (/u/[username]/songs). Queries run with the *viewer's* session, so
@@ -226,8 +227,10 @@ export async function getArtistSongs(supabase, userId, artistId) {
   // resolution) in the background and refreshes once it's done.
   const distinctHeardNames = Array.from(new Set(heardNamesRaw));
   const knownNormalized = new Set((catalogSongs ?? []).map((s) => normalizeSongName(s.name)));
+  // A due monthly "anything new?" check counts too, so opening an artist
+  // keeps their catalog current (1 Spotify request unless something came out).
   const needsSync =
-    !artist.catalog_synced_at ||
+    refreshPlan(artist) !== 'skip' ||
     !artist.groups_checked_at ||
     distinctHeardNames.some((name) => !knownNormalized.has(normalizeSongName(name)));
 

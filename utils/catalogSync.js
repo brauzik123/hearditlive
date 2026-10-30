@@ -1,6 +1,7 @@
 import {
   ensureArtistImage,
   getArtistReleases,
+  getReleaseCount,
   getAlbumTracks,
   searchTracks,
   mapLimit,
@@ -22,10 +23,10 @@ import {
   pickEditions,
 } from './releases';
 import { findArtistMbid, getBandMemberships } from './musicbrainz';
+import { refreshPlan } from './catalogRefresh';
 
 export { normalizeSongName };
 
-const SYNC_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MAX_SONG_LOOKUPS_PER_SYNC = 50;
 
 // A claim older than this is assumed abandoned (crashed/timed-out request).
@@ -54,12 +55,28 @@ async function recordFailure(supabase, artist) {
 }
 
 export async function ensureArtistSynced(supabase, artist) {
-  const syncedRecently =
-    artist.catalog_synced_at && Date.now() - new Date(artist.catalog_synced_at).getTime() < SYNC_MAX_AGE_MS;
-  if (syncedRecently) return artist;
+  // Full download, a one-request "anything new?" check, or nothing (see
+  // utils/catalogRefresh.js).
+  const plan = refreshPlan(artist);
+  if (plan === 'skip') return artist;
   if (isInBackoff(artist)) return artist;
   // Spotify has the whole app paused: wait it out without calling it.
   if (await spotifyBlockedUntil(supabase)) return artist;
+
+  if (plan === 'light' && artist.spotify_id) {
+    try {
+      const count = await getReleaseCount(artist.spotify_id);
+      if (count === artist.releases_total) {
+        const checkedAt = new Date().toISOString();
+        await supabase.from('artists').update({ catalog_checked_at: checkedAt }).eq('id', artist.id);
+        return { ...artist, catalog_checked_at: checkedAt };
+      }
+      // A different count: something came out (or was removed). Full sync.
+    } catch (err) {
+      if (err instanceof SpotifyRateLimitError) await blockSpotify(supabase, err.retryAfterSeconds);
+      return artist;
+    }
+  }
 
   // Atomically claim the sync; if another request holds a live claim, let
   // it do the work instead of syncing the same artist twice.
@@ -94,7 +111,8 @@ export async function ensureArtistSynced(supabase, artist) {
 
 async function syncCatalog(supabase, artist) {
   const resolved = await ensureArtistImage(supabase, artist);
-  const all = resolved.spotify_id ? pickEditions(await getArtistReleases(resolved.spotify_id)) : [];
+  const fetched = resolved.spotify_id ? await getArtistReleases(resolved.spotify_id) : { items: [], total: null };
+  const all = pickEditions(fetched.items);
   const releases = orderReleases(all, resolved.spotify_id);
 
   // One-track singles need no extra request: the release is the song.
@@ -129,6 +147,13 @@ async function syncCatalog(supabase, artist) {
   // "bts" as typed becomes "BTS" as Spotify credits it (spelling only).
   const official = officialSpelling(resolved.name, creditedName(all, resolved.spotify_id));
   if (official) await supabase.from('artists').update({ name: official }).eq('id', artist.id);
+
+  // Remembered for the cheap monthly check. Best effort: before migration
+  // 0025 the columns don't exist, and the next refresh is simply a full one.
+  await supabase
+    .from('artists')
+    .update({ releases_total: fetched.total, catalog_checked_at: new Date().toISOString() })
+    .eq('id', artist.id);
 
   return { ...resolved, ...(official ? { name: official } : {}), catalog_synced_at: new Date().toISOString() };
 }
