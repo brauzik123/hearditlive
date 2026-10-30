@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeSongName, sameArtistName } from './normalize';
+import { closeSongKey, normalizeSongName, sameArtistName } from './normalize';
 
 describe('normalizeSongName', () => {
   it('matches setlist titles to Spotify titles despite case and punctuation', () => {
@@ -62,5 +62,38 @@ describe('square brackets', () => {
 
   it('keeps square brackets that are part of the title', () => {
     expect(normalizeSongName('Intro [Part 2]')).toBe('intro part 2');
+  });
+});
+
+describe('setlist spellings', () => {
+  it('matches on the title before a stylized "| SECOND TITLE"', () => {
+    expect(normalizeSongName('SWITCH IT UP | ZW1TCH 1T UP')).toBe(normalizeSongName('SWITCH IT UP | ZWITCH 1T UP'));
+    expect(normalizeSongName('SIRENS | Z1RENZ')).toBe('sirens');
+  });
+
+  it('drops an unbracketed feat.', () => {
+    expect(normalizeSongName('WISH FEAT. KIDDO MARV')).toBe('wish');
+    expect(normalizeSongName('Song featuring Someone')).toBe('song');
+    expect(normalizeSongName('Defeat the Purpose')).toBe('defeat the purpose');
+    expect(normalizeSongName('Feat of Strength')).toBe('feat of strength');
+  });
+});
+
+describe('closeSongKey', () => {
+  const catalog = ['anotha late nite', 'ultimate', 'clout cobain', 'run', 'sirens'];
+
+  it('finds a title spelled almost the same', () => {
+    expect(closeSongKey('anotha late night', catalog)).toBe('anotha late nite');
+    expect(closeSongKey('clout cobian', catalog)).toBe('clout cobain');
+  });
+
+  it('never matches short titles or real differences', () => {
+    expect(closeSongKey('fun', catalog)).toBeNull();
+    expect(closeSongKey('zone 3', catalog)).toBeNull();
+    expect(closeSongKey('sailin da south', catalog)).toBeNull();
+  });
+
+  it("doesn't guess between two equally close titles", () => {
+    expect(closeSongKey('walking home', ['walkin home', 'walking hom'])).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import { normalizeSongName } from './normalize';
+import { closeSongKey, normalizeSongName } from './normalize';
 import { fetchAll, fetchAllIn } from './fetchAll';
 import { checked } from './checked';
 import { songCountsFor } from './showArtists';
@@ -142,8 +142,11 @@ export async function getSongsOverview(supabase, userId) {
   return artists
     .map((artist) => {
       const names = namesByArtist.get(artist.id) ?? [];
-      const distinctNormalized = new Set(names.map(normalizeSongName));
       const catalogSet = own.get(artist.id) ?? new Set();
+      // Same near-spelling match as the artist page (see getArtistSongs).
+      const distinctNormalized = new Set(
+        names.map(normalizeSongName).map((key) => (catalogSet.has(key) ? key : closeSongKey(key, catalogSet) ?? key))
+      );
       const catalogHeard = Array.from(distinctNormalized).filter((n) => catalogSet.has(n)).length;
 
       return {
@@ -197,6 +200,26 @@ export async function getArtistSongs(supabase, userId, artistId) {
     heard.count += 1;
     if (!row.asGuest) heard.asGuest = false;
   });
+
+  // Setlists misspell titles ("ANOTHA LATE NIGHT" for "ANOTHA LATE NITE"):
+  // a heard title matching nothing exactly joins the catalog title spelled
+  // almost the same, if there's exactly one.
+  const catalogKeys = new Set(
+    (catalogSongs ?? []).filter((s) => s.album_id || s.spotify_track_id).map((s) => normalizeSongName(s.name))
+  );
+  for (const [key, heard] of [...heardCounts]) {
+    if (catalogKeys.has(key)) continue;
+    const close = closeSongKey(key, catalogKeys);
+    if (!close) continue;
+    const existing = heardCounts.get(close);
+    if (existing) {
+      existing.count += heard.count;
+      existing.asGuest = existing.asGuest && heard.asGuest;
+    } else {
+      heardCounts.set(close, heard);
+    }
+    heardCounts.delete(key);
+  }
 
   // No blocking sync here — ArtistSongsView kicks off the sync (+ per-song
   // resolution) in the background and refreshes once it's done.

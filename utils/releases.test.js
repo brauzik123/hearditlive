@@ -283,3 +283,14 @@ describe('editions with a chopped tracklist under a plain name', () => {
     expect(preferPlainTracks([{ name: 'Only Chopped - ChoppedNotSlopped' }])).toHaveLength(1);
   });
 });
+
+describe('remix EPs', () => {
+  it('skips an EP of remixes but keeps a remix single', () => {
+    const kept = pickEditions([
+      release({ id: 'ep', name: 'BLACK BALLOONS | 13LACK 13ALLOONZ (Love Below Remixes)', type: 'single', tracks: 7 }),
+      release({ id: 'single', name: 'Congratulations (Remix)', type: 'single', tracks: 1, artist: ['post', QUAVO] }),
+      release({ id: 'album', name: 'TA13OO', tracks: 13 }),
+    ]);
+    expect(kept.map((r) => r.id).sort()).toEqual(['album', 'single']);
+  });
+});

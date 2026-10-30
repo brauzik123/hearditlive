@@ -26,8 +26,9 @@ export const LIVE_RELEASE = /(^|\s|\(|\[|-\s*)live(\s+(at|from|in|on)\b|\s*[)\]]
 
 // Whole albums re-released as a sound treatment: chopped & screwed
 // ("HEROES & VILLAINS [ChoppedNotSlopped]"), slowed, sped up, instrumental,
-// a cappella. Same songs, so they'd crowd out the original edition.
-export const VARIANT_RELEASE = /\b(chopped|screwed|slowed|sped[\s-]?up|instrumentals?|a[\s-]?cappella|acapella)/i;
+// a cappella, or an EP of remixes ("(Love Below Remixes)"). Same songs, so
+// they'd crowd out the original edition.
+export const VARIANT_RELEASE = /\b(chopped|screwed|slowed|sped[\s-]?up|instrumentals?|a[\s-]?cappella|acapella|remixes)/i;
 
 export function pickEditions(allReleases) {
   // Only albums and EPs are dropped as variants: a remix single someone else
