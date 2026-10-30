@@ -35,7 +35,7 @@ export function pickEditions(allReleases) {
   const releases = allReleases.filter((r) => !LIVE_RELEASE.test(r.name) && !(isTile(r) && VARIANT_RELEASE.test(r.name)));
   // Per album, the most complete edition wins; the others stay attached as
   // `alternates` (most tracks first) in case its tracklist turns out to be a
-  // chopped/slowed version under a plain name (see isVariantTracklist).
+  // chopped/slowed copy under a plain name (see bestEdition).
   const byKey = new Map();
   releases.forEach((release) => {
     const key = editionKey(release);
@@ -56,13 +56,34 @@ export function pickEditions(allReleases) {
   );
 }
 
-// A tracklist that's mostly chopped & screwed / slowed / sped-up versions
-// ("Raindrops (Insane) - ChoppedNotSlopped"), as on "HEROES & VILLAINS
-// (Villains Version)", whose name doesn't say so.
-const VARIANT_TRACK = /([-–—(\[]\s*)(chopped|screwed|slowed|sped[\s-]?up)/i;
-export function isVariantTracklist(tracks) {
-  if (!tracks?.length) return false;
-  return tracks.filter((t) => VARIANT_TRACK.test(t.name)).length > tracks.length / 2;
+// Tracks that are a sound treatment of another song: chopped & screwed,
+// slowed, sped up, instrumental, a cappella ("Raindrops (Insane) -
+// ChoppedNotSlopped"). Editions like "HEROES & VILLAINS (Villains Version)"
+// mix these with the originals without saying so in the name.
+const VARIANT_TRACK = /([-–—(\[]\s*)(chopped|screwed|slowed|sped[\s-]?up|instrumental|a[\s-]?cappella|acapella)/i;
+export const isVariantTrack = (track) => VARIANT_TRACK.test(track.name);
+
+// Share of a tracklist that's variant tracks (0–1).
+export function variantShare(tracks) {
+  if (!tracks?.length) return 0;
+  return tracks.filter(isVariantTrack).length / tracks.length;
+}
+
+// The tracklist without variant tracks whose original is also on it, so the
+// plain "Raindrops (Insane)" names the song, not its chopped twin.
+export function preferPlainTracks(tracks) {
+  const plain = new Set(tracks.filter((t) => !isVariantTrack(t)).map((t) => normalizeSongName(t.name)));
+  return tracks.filter((t) => !isVariantTrack(t) || !plain.has(normalizeSongName(t.name)));
+}
+
+// Among editions of one album ([{ release, tracks }]), the one with the most
+// distinct real songs; on a tie, the shortest, which is the plain original
+// rather than a version padded with chopped or instrumental copies.
+export function bestEdition(candidates) {
+  const songs = (tracks) => new Set(tracks.filter((t) => !isVariantTrack(t)).map((t) => normalizeSongName(t.name))).size;
+  return [...candidates].sort(
+    (a, b) => songs(b.tracks) - songs(a.tracks) || a.tracks.length - b.tracks.length
+  )[0];
 }
 
 // Spotify release dates can be just a year or a year and month.

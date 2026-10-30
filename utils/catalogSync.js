@@ -14,7 +14,9 @@ import {
   buildCatalog,
   classifyHeardTrack,
   creditedName,
-  isVariantTracklist,
+  bestEdition,
+  preferPlainTracks,
+  variantShare,
   officialSpelling,
   orderReleases,
   pickEditions,
@@ -100,17 +102,20 @@ async function syncCatalog(supabase, artist) {
     release.total_tracks > 1 ? getAlbumTracks(release.id) : [{ id: release.id, name: release.name }];
   const tracklists = await mapLimit(releases, 5, tracksOf);
 
-  // An edition that turns out to be chopped/slowed versions under a plain
-  // name gives way to the album's next edition (rare, so the extra fetch is
-  // cheap overall).
+  // An edition padded with chopped/slowed/instrumental copies of its own
+  // songs ("HEROES & VILLAINS (Villains Version)") is compared with the
+  // album's other editions, and the one with the most real songs, then the
+  // shortest, is kept. Only albums like that cost the extra fetches.
   for (let i = 0; i < releases.length; i++) {
-    let alternates = releases[i].alternates ?? [];
-    while (alternates.length && isVariantTracklist(tracklists[i])) {
-      const [next, ...rest] = alternates;
-      releases[i] = { ...next, alternates: rest };
-      tracklists[i] = await tracksOf(next);
-      alternates = rest;
+    const alternates = releases[i].alternates ?? [];
+    if (alternates.length && variantShare(tracklists[i]) >= 0.25) {
+      const candidates = [{ release: releases[i], tracks: tracklists[i] }];
+      for (const alt of alternates) candidates.push({ release: alt, tracks: await tracksOf(alt) });
+      const best = bestEdition(candidates);
+      releases[i] = best.release;
+      tracklists[i] = best.tracks;
     }
+    tracklists[i] = preferPlainTracks(tracklists[i]);
   }
   const { albums, songs } = buildCatalog(releases, tracklists, resolved.spotify_id);
 

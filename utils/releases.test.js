@@ -5,7 +5,9 @@ import {
   creditedName,
   editionKey,
   isOwnRelease,
-  isVariantTracklist,
+  bestEdition,
+  preferPlainTracks,
+  variantShare,
   officialSpelling,
   orderReleases,
   pickEditions,
@@ -248,15 +250,36 @@ describe('editions with a chopped tracklist under a plain name', () => {
     expect(picked.alternates.map((r) => r.id)).toEqual(['og']);
   });
 
-  it('spots a tracklist that is mostly chopped or slowed versions', () => {
-    const villains = [
-      { name: 'Raindrops (Insane) [with Travis Scott] - ChoppedNotSlopped' },
-      { name: 'Umbrella (with 21 Savage & Young Nudy) - ChoppedNotSlopped' },
-      { name: 'Creepin’ (with The Weeknd & 21 Savage) - ChoppedNotSlopped' },
-      { name: 'On Time (with John Legend)' },
-    ];
-    expect(isVariantTracklist(villains)).toBe(true);
-    expect(isVariantTracklist([{ name: 'Sicko Mode' }, { name: 'Stargazing' }, { name: 'Mo Bamba (Slowed)' }])).toBe(false);
-    expect(isVariantTracklist([])).toBe(false);
+  // HEROES & VILLAINS as Spotify has it: the original (15), and two
+  // 30-track versions that pad it with chopped or instrumental copies.
+  const SONGS = ['On Time (with John Legend)', 'Raindrops (Insane) [with Travis Scott]', 'Umbrella (with 21 Savage & Young Nudy)'];
+  const original = SONGS.map((name) => ({ name }));
+  const villains = [...SONGS.map((name) => ({ name: `${name} - ChoppedNotSlopped` })), ...original];
+  const heroes = [...original, ...SONGS.map((name) => ({ name: `${name} - Instrumental` }))];
+
+  it('measures how much of a tracklist is chopped, slowed or instrumental copies', () => {
+    expect(variantShare(villains)).toBe(0.5);
+    expect(variantShare(original)).toBe(0);
+    expect(variantShare([])).toBe(0);
+  });
+
+  it('picks the edition with the most real songs, then the shortest one', () => {
+    const best = bestEdition([
+      { release: { id: 'villains' }, tracks: villains },
+      { release: { id: 'heroes' }, tracks: heroes },
+      { release: { id: 'og' }, tracks: original },
+    ]);
+    expect(best.release.id).toBe('og');
+  });
+
+  it('still prefers a real deluxe edition with extra songs', () => {
+    const deluxe = [...original, { name: 'Bonus Song' }];
+    expect(bestEdition([{ release: { id: 'og' }, tracks: original }, { release: { id: 'deluxe' }, tracks: deluxe }]).release.id).toBe('deluxe');
+  });
+
+  it("names each song by its plain version, not its chopped twin", () => {
+    expect(preferPlainTracks(villains).map((t) => t.name)).toEqual(SONGS);
+    // A chopped track with no plain version on the album stays.
+    expect(preferPlainTracks([{ name: 'Only Chopped - ChoppedNotSlopped' }])).toHaveLength(1);
   });
 });
